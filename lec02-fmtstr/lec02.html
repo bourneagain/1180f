@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Lec02: Format String Vulnerabilities</title>
+<meta charset="utf-8"/>
+<meta content="ie=edge" http-equiv="x-ua-compatible"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<link href="../shower/styles/ribbon.css" rel="stylesheet"/>
+<style type="text/css">
+a.sourceLine { display: inline-block; line-height: 1.25; }
+a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+a.sourceLine:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode { white-space: pre; position: relative; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+code.sourceCode { white-space: pre-wrap; }
+a.sourceLine { text-indent: -1em; padding-left: 1em; }
+}
+pre.numberSource a.sourceLine
+{ position: relative; left: -4em; }
+pre.numberSource a.sourceLine::before
+{ content: attr(title);
+  position: relative; left: -1em; text-align: right; vertical-align: baseline;
+  border: none; pointer-events: all; display: inline-block;
+  -webkit-touch-callout: none; -webkit-user-select: none;
+  -khtml-user-select: none; -moz-user-select: none;
+  -ms-user-select: none; user-select: none;
+  padding: 0 4px; width: 4em;
+  color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+{  }
+@media screen {
+a.sourceLine::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+<style>
+section pre code {
+  line-height: 1.4 !important;
+  font-size: 20px !important;
+}
+.compact code {
+  line-height: 1.4 !important;
+  font-size: 16px !important;
+}
+ul.compact {
+  line-height: 1.5 !important;
+  font-size: 20px !important;
+}
+.writeup {
+    font-size: 20px !important;
+}
+a.sourceLine { background: none !important; }
+section.region { display: none !important; }
+pre.numberSource { margin-left: 2em; }
+div.sourceCode { overflow: hidden; }
+a.sourceLine::before { text-decoration: none; }
+
+</style>
+<script src="../shower/js/jquery-2.2.0.min.js"></script>
+</head>
+<body class="shower list">
+<header class="caption">
+<h1>Security vulnerabilities and their mitigation in native code</h1>
+<p>Taesoo Kim</p>
+</header>
+<header class="caption">
+</header>
+<section class="slide" id="cover">
+<br/><br/><br/><br/>
+<h2>Lec02: Format String Vulnerabilities</h2>
+<p> Taesoo Kim</p>
+<style>
+ #cover h2 {
+   /* margin:180px 0 0; */
+   color: #666;
+   text-align:center;
+   font-size:60px;
+   font-weight: bold;
+ }
+ #cover p {
+   margin:30px 0 0;
+   text-align:center;
+   font-style:italic;
+   font-size:40px;
+ }
+ </style>
+</section>
+
+<section class="slide level1" id="outline"><div>
+<h1>Outline</h1>
+<ul>
+<li>Off-the-shelf defenses:
+<ol type="1">
+<li>ASLR: Address Space Layout Randomization</li>
+<li>RELRO: Relocation Readonly</li>
+</ol></li>
+</ul>
+</div></section>
+<section class="slide level1" id="defense-3-aslr"><div>
+<h1>Defense 3: ASLR</h1>
+<ul>
+<li>Option: -fPIE -pie
+<ul>
+<li>Make the binary position independent (so randomizable)</li>
+<li>Randomization on stack/heap/libs is system-wide configuration</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb1-1" title="1">$ <span class="bu">cd</span> lec02-fmtstr/aslr</a>
+<a class="sourceLine" id="cb1-2" title="2">$ <span class="fu">make</span><span class="kw">;</span> <span class="ex">./aslr</span></a>
+<a class="sourceLine" id="cb1-3" title="3"><span class="ex">stack</span>     : 0x7fff5b81ae6c</a>
+<a class="sourceLine" id="cb1-4" title="4"><span class="fu">main()</span>    <span class="bu">:</span> 0x558e2867e149</a>
+<a class="sourceLine" id="cb1-5" title="5"><span class="ex">heap</span>      : 0x558e291a0270</a>
+<a class="sourceLine" id="cb1-6" title="6"><span class="ex">...</span></a>
+<a class="sourceLine" id="cb1-7" title="7"><span class="op">&gt;</span> <span class="ex">offset</span> (<span class="kw">&amp;</span><span class="ex">global-</span><span class="kw">&amp;</span><span class="ex">main</span>)   <span class="bu">:</span> 0x2ee7</a>
+<a class="sourceLine" id="cb1-8" title="8"><span class="op">&gt;</span> <span class="ex">offset</span> (<span class="kw">&amp;</span><span class="ex">printf-</span><span class="kw">&amp;</span><span class="ex">system</span>) <span class="bu">:</span> 0x14020</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="aslr-real-entrophy"><div>
+<h1>ASLR: Real Entrophy</h1>
+<ul>
+<li>In theory, 47-bit in userspace in x86_64 (run ./check-aslr.sh)</li>
+</ul>
+<p style="text-align:center;margin:0"><img src="img/aslr-combined.svg" style="width:60%"/></p>
+</div></section>
+<section class="slide level1" id="security-implication-of-aslr"><div>
+<h1>Security Implication of ASLR</h1>
+<ul>
+<li>ASLR makes the exploitation harder (i.e., first line defense)</li>
+<li>Attackers first have to “leak” code pointers
+<ul>
+<li>Stack and heap of the program, or libc module</li>
+</ul></li>
+<li>Less effective in fork()-based programs
+<ul>
+<li>e.g., Zygote in Android, a thread pool in Apache</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="defense-4-relro"><div>
+<h1>Defense 4: RELRO</h1>
+<ul>
+<li>Relocation tables containing func. pointers are common attack vectors
+<ul>
+<li>RELRO makes it read-only instead of resolving them on demand</li>
+</ul></li>
+<li>PLT (Procedure Linkage Table) and GOT (Global Offset Table)</li>
+</ul>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb2-1" title="1">   main(){ puts(<span class="st">"hello world!</span><span class="sc">\n</span><span class="st">)"</span>); }</a>
+<a class="sourceLine" id="cb2-2" title="2"></a>
+<a class="sourceLine" id="cb2-3" title="3">   <span class="bn">0x080488b6</span> &lt;main+<span class="dv">211</span>&gt;: sub    esp,<span class="bn">0xc</span></a>
+<a class="sourceLine" id="cb2-4" title="4">   <span class="bn">0x080488b9</span> &lt;main+<span class="dv">214</span>&gt;: push   <span class="bn">0x80489ff</span></a>
+<a class="sourceLine" id="cb2-5" title="5">   <span class="bn">0x080488be</span> &lt;main+<span class="dv">219</span>&gt;: call   <span class="bn">0x8048540</span> &lt;puts@plt&gt;</a>
+<a class="sourceLine" id="cb2-6" title="6">                                 ^</a>
+<a class="sourceLine" id="cb2-7" title="7">                                 +--- not puts() in libc!</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="pltgot-internals-first-puts-call"><div>
+<h1>PLT/GOT Internals (First puts() Call)</h1>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb3-1" title="1">   <span class="bn">0x080488be</span> &lt;main+<span class="dv">219</span>&gt;  : call   <span class="bn">0x8048540</span> &lt;puts@plt&gt;</a>
+<a class="sourceLine" id="cb3-2" title="2">    ↓</a>
+<a class="sourceLine" id="cb3-3" title="3">►  <span class="bn">0x8048540</span> &lt;puts@plt&gt;   : jmp    dword ptr [_GOT_+<span class="dv">40</span>] ---+</a>
+<a class="sourceLine" id="cb3-4" title="4">   <span class="bn">0x8048546</span> &lt;puts@plt+<span class="dv">6</span>&gt; : push   <span class="bn">0x38</span>                &lt;---+ (<span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb3-5" title="5">   <span class="bn">0x804854b</span> &lt;puts@plt+<span class="dv">11</span>&gt;: jmp    <span class="bn">0x80484c0</span></a>
+<a class="sourceLine" id="cb3-6" title="6">    ↓</a>
+<a class="sourceLine" id="cb3-7" title="7">   <span class="bn">0x80484c0</span> : push   dword ptr [_GOT_+<span class="dv">4</span>]</a>
+<a class="sourceLine" id="cb3-8" title="8">   <span class="bn">0x80484c6</span> : jmp    dword ptr [<span class="bn">0x804a008</span>] &lt;<span class="bn">0xf7fe9240</span>&gt;</a>
+<a class="sourceLine" id="cb3-9" title="9">    ↓</a>
+<a class="sourceLine" id="cb3-10" title="10">   <span class="bn">0xf7fe9240</span> &lt;_dl_runtime_resolve&gt;  : push   eax</a>
+<a class="sourceLine" id="cb3-11" title="11">   <span class="bn">0xf7fe9241</span> &lt;_dl_runtime_resolve+<span class="dv">1</span>&gt;: push   ecx</a>
+<a class="sourceLine" id="cb3-12" title="12">   <span class="bn">0xf7fe9242</span> &lt;_dl_runtime_resolve+<span class="dv">2</span>&gt;: push   edx</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="pltgot-internals-second-puts-call"><div>
+<h1>PLT/GOT Internals (Second puts() Call)</h1>
+<div class="sourceCode" id="cb4"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb4-1" title="1">   <span class="bn">0x080488be</span> &lt;main+<span class="dv">219</span>&gt;  : call   <span class="bn">0x8048540</span> &lt;puts@plt&gt;</a>
+<a class="sourceLine" id="cb4-2" title="2">    ↓</a>
+<a class="sourceLine" id="cb4-3" title="3">►  <span class="bn">0x8048540</span> &lt;puts@plt&gt;   : jmp    dword ptr [_GOT_+<span class="dv">40</span>] --- (<span class="dv">2</span>)</a>
+<a class="sourceLine" id="cb4-4" title="4">    ↓</a>
+<a class="sourceLine" id="cb4-5" title="5">   <span class="bn">0xf7e09930</span> &lt;puts&gt;:   push   ebp</a>
+<a class="sourceLine" id="cb4-6" title="6">   <span class="bn">0xf7e09931</span> &lt;puts+<span class="dv">1</span>&gt;: mov    ebp,esp</a>
+<a class="sourceLine" id="cb4-7" title="7">   <span class="bn">0xf7e09933</span> &lt;puts+<span class="dv">3</span>&gt;: push   edi</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="checking-common-defenses"><div>
+<h1>Checking Common Defenses</h1>
+<div class="sourceCode" id="cb5"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb5-1" title="1">$ <span class="ex">checksec</span> /usr/bin/ls</a>
+<a class="sourceLine" id="cb5-2" title="2">[<span class="ex">*</span>] <span class="st">'/usr/bin/ls'</span></a>
+<a class="sourceLine" id="cb5-3" title="3">    <span class="ex">Arch</span>:     amd64-64-little</a>
+<a class="sourceLine" id="cb5-4" title="4">    <span class="ex">RELRO</span>:    Full RELRO</a>
+<a class="sourceLine" id="cb5-5" title="5">    <span class="ex">Stack</span>:    Canary found</a>
+<a class="sourceLine" id="cb5-6" title="6">    <span class="ex">NX</span>:       NX enabled</a>
+<a class="sourceLine" id="cb5-7" title="7">    <span class="ex">PIE</span>:      PIE enabled</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="goals-and-lessons"><div>
+<h1>Goals and Lessons</h1>
+<ul>
+<li>Learn about the format string bugs</li>
+<li>Understand their security implications</li>
+<li>Understand the off-the-shelf mitigation</li>
+<li>Learn them from the real-world examples (i.e., sudo/Linux)</li>
+</ul>
+</div></section>
+<section class="slide level1" id="about-format-string"><div>
+<h1>About Format String</h1>
+<ul>
+<li>How does printf() know of #arguments passed?</li>
+<li>How do we access the arguments in the function?</li>
+</ul>
+<div class="sourceCode" id="cb6"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb6-1" title="1">  <span class="dv">1</span>) printf(<span class="st">"hello: %d"</span>, <span class="dv">10</span>);</a>
+<a class="sourceLine" id="cb6-2" title="2">  <span class="dv">2</span>) printf(<span class="st">"hello: %d/%d"</span>, <span class="dv">10</span>, <span class="dv">20</span>);</a>
+<a class="sourceLine" id="cb6-3" title="3">  <span class="dv">3</span>) printf(<span class="st">"hello: %d/%d/%d"</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>);</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="about-a-variadic-function"><div>
+<h1>About a “Variadic” Function</h1>
+<div class="sourceCode" id="cb7"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb7-1" title="1"><span class="dt">int</span> sum_up(<span class="dt">int</span> count,...) {</a>
+<a class="sourceLine" id="cb7-2" title="2">  <span class="dt">va_list</span> ap;</a>
+<a class="sourceLine" id="cb7-3" title="3">  <span class="dt">int</span> i, sum = <span class="dv">0</span>;</a>
+<a class="sourceLine" id="cb7-4" title="4"></a>
+<a class="sourceLine" id="cb7-5" title="5">  va_start (ap, count);</a>
+<a class="sourceLine" id="cb7-6" title="6">  <span class="cf">for</span> (i = <span class="dv">0</span>; i &lt; count; i++)</a>
+<a class="sourceLine" id="cb7-7" title="7">    sum += va_arg (ap, <span class="dt">int</span>);</a>
+<a class="sourceLine" id="cb7-8" title="8"></a>
+<a class="sourceLine" id="cb7-9" title="9">  va_end (ap);</a>
+<a class="sourceLine" id="cb7-10" title="10">  <span class="cf">return</span> sum;</a>
+<a class="sourceLine" id="cb7-11" title="11">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="about-a-variadic-function-1"><div>
+<h1>About a “Variadic” Function</h1>
+<div class="sourceCode" id="cb8"><pre class="sourceCode s"><code class="sourceCode gnuassembler"><a class="sourceLine" id="cb8-1" title="1">  va_start (ap, count)<span class="co">;</span></a>
+<a class="sourceLine" id="cb8-2" title="2">    lea   eax,[ebp+<span class="bn">0xc</span>]             // Q1. <span class="bn">0xc</span>?</a>
+<a class="sourceLine" id="cb8-3" title="3">    mov   DWORD PTR [ebp<span class="bn">-0x18</span>],eax</a>
+<a class="sourceLine" id="cb8-4" title="4"></a>
+<a class="sourceLine" id="cb8-5" title="5">  for (i = <span class="dv">0</span><span class="co">; i &lt; count; i++)</span></a>
+<a class="sourceLine" id="cb8-6" title="6">    sum += va_arg (ap, int)<span class="co">;</span></a>
+<a class="sourceLine" id="cb8-7" title="7"></a>
+<a class="sourceLine" id="cb8-8" title="8">    mov   eax,DWORD PTR [ebp<span class="bn">-0x18</span>]</a>
+<a class="sourceLine" id="cb8-9" title="9">    lea   edx,[eax+<span class="bn">0x4</span>]             // Q2. +<span class="dv">4</span>?</a>
+<a class="sourceLine" id="cb8-10" title="10">    mov   DWORD PTR [ebp<span class="bn">-0x18</span>],edx</a>
+<a class="sourceLine" id="cb8-11" title="11">    mov   eax,DWORD PTR [eax]</a>
+<a class="sourceLine" id="cb8-12" title="12">    add   DWORD PTR [ebp<span class="bn">-0x10</span>],eax</a>
+<a class="sourceLine" id="cb8-13" title="13">    ...</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="format-string-e.g.-printf"><div>
+<h1>Format String: e.g., printf()</h1>
+<ul>
+<li>What happen if we miss one format specifier?</li>
+<li>What happen if we miss one argument?</li>
+</ul>
+<div class="sourceCode" id="cb9"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb9-1" title="1">  <span class="co">// buggy</span></a>
+<a class="sourceLine" id="cb9-2" title="2">  <span class="dv">1</span>) printf(<span class="st">"hello: %d/%d[missing]"</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>);</a>
+<a class="sourceLine" id="cb9-3" title="3">  <span class="dv">2</span>) printf(<span class="st">"hello: %d/%d/%d"</span>, <span class="dv">10</span>, <span class="dv">20</span>, [missing]);</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="format-string-e.g.-printf-1"><div>
+<h1>Format String: e.g., printf()</h1>
+<ul>
+<li>What does printf() print out? guess?</li>
+</ul>
+<div class="sourceCode" id="cb10"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb10-1" title="1">  printf(<span class="st">"%d/%d/%d"</span>, <span class="dv">10</span>, <span class="dv">20</span>)</a>
+<a class="sourceLine" id="cb10-2" title="2"></a>
+<a class="sourceLine" id="cb10-3" title="3">(top)</a>
+<a class="sourceLine" id="cb10-4" title="4">       +----(n)----+</a>
+<a class="sourceLine" id="cb10-5" title="5">       |           v</a>
+<a class="sourceLine" id="cb10-6" title="6">  [ra][fmt][<span class="dv">10</span>][<span class="dv">20</span>][??][..]</a>
+<a class="sourceLine" id="cb10-7" title="7">           (<span class="dv">1</span>) (<span class="dv">2</span>) (<span class="dv">3</span>) ....</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="format-string-vulnerabilities"><div>
+<h1>Format String Vulnerabilities</h1>
+<ul>
+<li>What if attackers can control the format specifier (fmtstr)?
+<ul>
+<li>Arbitrary read → info leaks (e.g., code pointers)</li>
+<li>Arbitrary write → control-flow hijacking</li>
+<li>Bypass many existing mitigation (e.g., DEP, ASLR)</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb11"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb11-1" title="1">  printf(<span class="st">"%d/%d/%d"</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>)</a>
+<a class="sourceLine" id="cb11-2" title="2">  printf(fmtstr, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>)?</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="about-format-string-specifiers"><div>
+<h1>About Format String Specifiers</h1>
+<ul>
+<li>Very complex, versatile (e.g., &gt; 482 lines document)</li>
+</ul>
+<div class="sourceCode" id="cb12"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb12-1" title="1">  %p: pointer</a>
+<a class="sourceLine" id="cb12-2" title="2">  %s: string</a>
+<a class="sourceLine" id="cb12-3" title="3">  %d: <span class="dt">int</span></a>
+<a class="sourceLine" id="cb12-4" title="4">  %x: hex</a>
+<a class="sourceLine" id="cb12-5" title="5"></a>
+<a class="sourceLine" id="cb12-6" title="6">  Tip <span class="fl">1.</span> positional argument</a>
+<a class="sourceLine" id="cb12-7" title="7">     %[nth]$p</a>
+<a class="sourceLine" id="cb12-8" title="8">     (e.g., %<span class="dv">2</span>$p = second argument)</a>
+<a class="sourceLine" id="cb12-9" title="9">     (e.g., printf(<span class="st">"%2$d"</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>) -&gt; <span class="dv">20</span>)</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="implication-1-arbitrary-read"><div>
+<h1>Implication 1: Arbitrary Read</h1>
+<ul>
+<li>If fmtbuf locats on the stack (perhaps, one of caller’s),</li>
+<li>Then, we can essentially control its argument!</li>
+</ul>
+<div class="sourceCode" id="cb13"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb13-1" title="1">  printf(fmtbuf)</a>
+<a class="sourceLine" id="cb13-2" title="2">  printf(<span class="st">"</span><span class="sc">\xaa\xbb\xcc\xdd</span><span class="st">%3$s"</span>)</a>
+<a class="sourceLine" id="cb13-3" title="3"></a>
+<a class="sourceLine" id="cb13-4" title="4">(top)</a>
+<a class="sourceLine" id="cb13-5" title="5">       +---(3rd)---+</a>
+<a class="sourceLine" id="cb13-6" title="6">       |           v fmtbuf</a>
+<a class="sourceLine" id="cb13-7" title="7">  [ra][fmt][a1][a2][\xaa\xbb\xcc\xdd%<span class="dv">3</span>$s]</a>
+<a class="sourceLine" id="cb13-8" title="8">           (<span class="dv">1</span>) (<span class="dv">2</span>) (<span class="dv">3</span>) ....</a>
+<a class="sourceLine" id="cb13-9" title="9"></a>
+<a class="sourceLine" id="cb13-10" title="10">                      (<span class="dv">1</span>)(<span class="dv">2</span>)(<span class="dv">3</span>)</a>
+<a class="sourceLine" id="cb13-11" title="11">  -&gt; printf(<span class="st">"...%3$s"</span>, _, _, <span class="bn">0xddccbbaa</span>)</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="more-about-format-string-specifiers"><div>
+<h1>More About Format String Specifiers</h1>
+<ul>
+<li>We can write #chars printed so far!</li>
+<li>By the way, do we need this? any application?</li>
+</ul>
+<div class="sourceCode" id="cb14"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb14-1" title="1">  printf(<span class="st">"1234%n"</span>, &amp;len) -&gt; len=<span class="dv">4</span></a>
+<a class="sourceLine" id="cb14-2" title="2"></a>
+<a class="sourceLine" id="cb14-3" title="3">  %n: write #bytes (<span class="dt">int</span>)</a>
+<a class="sourceLine" id="cb14-4" title="4">  %hn (<span class="dt">short</span>), %hhn (byte)</a>
+<a class="sourceLine" id="cb14-5" title="5"></a>
+<a class="sourceLine" id="cb14-6" title="6">  Tip <span class="fl">2.</span> width parameter</a>
+<a class="sourceLine" id="cb14-7" title="7">      %10d: print an <span class="dt">int</span> on <span class="dv">10</span>-space word</a>
+<a class="sourceLine" id="cb14-8" title="8">      (e.g., <span class="st">"        10"</span>)</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="write-sth-to-an-arbitrary-location"><div>
+<h1>Write (sth) to an Arbitrary Location</h1>
+<ul>
+<li>Similar to the arbitrary read, we can control the arguments!</li>
+</ul>
+<div class="sourceCode" id="cb15"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb15-1" title="1">  printf(<span class="st">"</span><span class="sc">\xaa\xbb\xcc\xdd</span><span class="st">%3$n"</span>)</a>
+<a class="sourceLine" id="cb15-2" title="2"></a>
+<a class="sourceLine" id="cb15-3" title="3">(top)</a>
+<a class="sourceLine" id="cb15-4" title="4">       +---(3rd)---+</a>
+<a class="sourceLine" id="cb15-5" title="5">       |           v</a>
+<a class="sourceLine" id="cb15-6" title="6">  [ra][fmt][a1][a2][\xaa\xbb\xcc\xdd%<span class="dv">3</span>$n]</a>
+<a class="sourceLine" id="cb15-7" title="7">           (<span class="dv">1</span>) (<span class="dv">2</span>) (<span class="dv">3</span>) ....</a>
+<a class="sourceLine" id="cb15-8" title="8"></a>
+<a class="sourceLine" id="cb15-9" title="9">                      (<span class="dv">1</span>)(<span class="dv">2</span>)(<span class="dv">3</span>)</a>
+<a class="sourceLine" id="cb15-10" title="10">  -&gt; printf(<span class="st">"...%3$n"</span>, _, _, <span class="bn">0xddccbbaa</span>)</a>
+<a class="sourceLine" id="cb15-11" title="11">     *<span class="bn">0xddccbbaa</span> = <span class="dv">4</span> (#chars printed so far)</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="implication-2-arbitrary-write"><div>
+<h1>Implication 2: Arbitrary Write</h1>
+<ul>
+<li>In fact, we can control what to write (see more in the tutorial)!</li>
+</ul>
+<div class="sourceCode" id="cb16"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb16-1" title="1">  printf(<span class="st">"</span><span class="sc">\xaa\xbb\xcc\xdd</span><span class="st">%6c%3$n"</span>)</a>
+<a class="sourceLine" id="cb16-2" title="2"></a>
+<a class="sourceLine" id="cb16-3" title="3">(top)</a>
+<a class="sourceLine" id="cb16-4" title="4">       +---(3rd)---+</a>
+<a class="sourceLine" id="cb16-5" title="5">       |           v</a>
+<a class="sourceLine" id="cb16-6" title="6">  [ra][fmt][a1][a2][\xaa\xbb\xcc\xdd%6c%<span class="dv">3</span>$n]</a>
+<a class="sourceLine" id="cb16-7" title="7">           (<span class="dv">1</span>) (<span class="dv">2</span>) (<span class="dv">3</span>) ....</a>
+<a class="sourceLine" id="cb16-8" title="8"></a>
+<a class="sourceLine" id="cb16-9" title="9">  -&gt; *<span class="bn">0xddccbbaa</span> = strlen(<span class="st">"</span><span class="sc">\xaa\xbb\xcc\xdd</span><span class="st">      "</span>) = <span class="dv">10</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="notes-on-arbitrary-writes"><div>
+<h1>Notes on Arbitrary Writes</h1>
+<ul>
+<li>Writing a “pointer” is painful (i.e., printing humongous number of spaces)</li>
+<li>Utilizing %hhn (byte), %hn (short), smaller writes</li>
+</ul>
+<div class="sourceCode" id="cb17"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb17-1" title="1"><span class="co">// writing *0xddccbbaa = 0xdeadbeef -&gt; four writes</span></a>
+<a class="sourceLine" id="cb17-2" title="2">*(<span class="bn">0xddccbbaa</span>+<span class="dv">0</span>) = <span class="bn">0xef</span></a>
+<a class="sourceLine" id="cb17-3" title="3">*(<span class="bn">0xddccbbaa</span>+<span class="dv">1</span>) = <span class="bn">0xbe</span></a>
+<a class="sourceLine" id="cb17-4" title="4">*(<span class="bn">0xddccbbaa</span>+<span class="dv">2</span>) = <span class="bn">0xad</span></a>
+<a class="sourceLine" id="cb17-5" title="5">*(<span class="bn">0xddccbbaa</span>+<span class="dv">3</span>) = <span class="bn">0xde</span></a>
+<a class="sourceLine" id="cb17-6" title="6"></a>
+<a class="sourceLine" id="cb17-7" title="7">[ABCDXXX]</a>
+<a class="sourceLine" id="cb17-8" title="8"> <span class="dv">0000</span>           = <span class="bn">0xef</span></a>
+<a class="sourceLine" id="cb17-9" title="9">  <span class="dv">1111</span>          = <span class="bn">0xbe</span></a>
+<a class="sourceLine" id="cb17-10" title="10">   <span class="dv">2222</span>         = <span class="bn">0xad</span></a>
+<a class="sourceLine" id="cb17-11" title="11">    <span class="dv">3333</span>        = <span class="bn">0xde</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="notes-on-more-advanced-attacks"><div>
+<h1>Notes on More Advanced Attacks</h1>
+<ul>
+<li>Previous security issues assume that the input buffer locates in stack</li>
+<li>The input buffer in heap has similar implications (a.k.a., blind fmtstr)!</li>
+</ul>
+<div class="sourceCode" id="cb18"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb18-1" title="1">(top)</a>
+<a class="sourceLine" id="cb18-2" title="2">                      +---------+ +--------+</a>
+<a class="sourceLine" id="cb18-3" title="3">                      |         v |        v</a>
+<a class="sourceLine" id="cb18-4" title="4">     [ra][fmt][ ... ][fp][ ... ][fp][ ... ][fp]</a>
+<a class="sourceLine" id="cb18-5" title="5">                      I-th       J-th</a>
+<a class="sourceLine" id="cb18-6" title="6"></a>
+<a class="sourceLine" id="cb18-7" title="7">  - Overwriting to the location in I-th argument (J-th)</a>
+<a class="sourceLine" id="cb18-8" title="8">  - Referring the written value via the J-th argfument</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="exercise-real-world-examples"><div>
+<h1>Exercise: Real-world Examples</h1>
+<ul>
+<li>Ex1. Linux block device (CVE-2013-2851)</li>
+<li>Ex2. Linux ext3 (CVE-2013-1848)</li>
+<li>Ex3. sudo (CVE-2012-0809)</li>
+</ul>
+</div></section>
+<section class="slide level1" id="cve-2013-2851-linux-block-device"><div>
+<h1>CVE-2013-2851: Linux block device</h1>
+<div class="sourceCode" id="cb19"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb19-1" title="1"><span class="dt">int</span> dev_set_name(<span class="kw">struct</span> device *dev, <span class="dt">const</span> <span class="dt">char</span> *fmt, ...) {</a>
+<a class="sourceLine" id="cb19-2" title="2">  <span class="dt">va_list</span> vargs;</a>
+<a class="sourceLine" id="cb19-3" title="3">  <span class="dt">int</span> err;</a>
+<a class="sourceLine" id="cb19-4" title="4"></a>
+<a class="sourceLine" id="cb19-5" title="5">  va_start(vargs, fmt);</a>
+<a class="sourceLine" id="cb19-6" title="6">  err = kobject_set_name_vargs(&amp;dev-&gt;kobj, fmt, vargs);</a>
+<a class="sourceLine" id="cb19-7" title="7">  va_end(vargs);</a>
+<a class="sourceLine" id="cb19-8" title="8">  <span class="cf">return</span> err;</a>
+<a class="sourceLine" id="cb19-9" title="9">}</a>
+<a class="sourceLine" id="cb19-10" title="10"></a>
+<a class="sourceLine" id="cb19-11" title="11"><span class="co">// @register_disk()</span></a>
+<a class="sourceLine" id="cb19-12" title="12">dev_set_name(ddev, disk-&gt;disk_name);</a>
+<a class="sourceLine" id="cb19-13" title="13"></a>
+<a class="sourceLine" id="cb19-14" title="14"><span class="co">// @__nbd_ioctl()</span></a>
+<a class="sourceLine" id="cb19-15" title="15">kthread_create(nbd_thread, nbd, nbd-&gt;disk-&gt;disk_name);</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2013-1848-linux-ext3"><div>
+<h1>CVE-2013-1848: Linux ext3</h1>
+<div class="sourceCode" id="cb20"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb20-1" title="1"><span class="dt">void</span> ext3_msg(<span class="kw">struct</span> super_block *sb, <span class="dt">const</span> <span class="dt">char</span> *prefix,</a>
+<a class="sourceLine" id="cb20-2" title="2">        <span class="dt">const</span> <span class="dt">char</span> *fmt, ...)</a>
+<a class="sourceLine" id="cb20-3" title="3">{</a>
+<a class="sourceLine" id="cb20-4" title="4">  <span class="kw">struct</span> va_format vaf;</a>
+<a class="sourceLine" id="cb20-5" title="5">  <span class="dt">va_list</span> args;</a>
+<a class="sourceLine" id="cb20-6" title="6"></a>
+<a class="sourceLine" id="cb20-7" title="7">  va_start(args, fmt);</a>
+<a class="sourceLine" id="cb20-8" title="8"></a>
+<a class="sourceLine" id="cb20-9" title="9">  vaf.fmt = fmt;</a>
+<a class="sourceLine" id="cb20-10" title="10">  vaf.va = &amp;args;</a>
+<a class="sourceLine" id="cb20-11" title="11"></a>
+<a class="sourceLine" id="cb20-12" title="12">  printk(<span class="st">"%sEXT3-fs (%s): %pV</span><span class="sc">\n</span><span class="st">"</span>, prefix, sb-&gt;s_id, &amp;vaf);</a>
+<a class="sourceLine" id="cb20-13" title="13"></a>
+<a class="sourceLine" id="cb20-14" title="14">  va_end(args);</a>
+<a class="sourceLine" id="cb20-15" title="15">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2013-1848-linux-ext3-1"><div>
+<h1>CVE-2013-1848: Linux ext3</h1>
+<div class="sourceCode" id="cb21"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb21-1" title="1"><span class="co">// @get_sb_block()</span></a>
+<a class="sourceLine" id="cb21-2" title="2">ext3_msg(sb, <span class="st">"error: invalid sb specification: %s"</span>, *data);</a>
+<a class="sourceLine" id="cb21-3" title="3"></a>
+<a class="sourceLine" id="cb21-4" title="4"><span class="co">// @ext3_blkdev_get()</span></a>
+<a class="sourceLine" id="cb21-5" title="5">ext3_msg(sb, <span class="st">"error: failed to open journal device %s: %ld"</span>, </a>
+<a class="sourceLine" id="cb21-6" title="6">         __bdevname(dev, b), PTR_ERR(bdev));</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2012-0809-sudo"><div>
+<h1>CVE-2012-0809: sudo</h1>
+<div class="sourceCode" id="cb22"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb22-1" title="1"><span class="dt">void</span> sudo_debug(<span class="dt">int</span> level, <span class="dt">const</span> <span class="dt">char</span> *fmt, ...) {</a>
+<a class="sourceLine" id="cb22-2" title="2">  <span class="dt">va_list</span> ap;</a>
+<a class="sourceLine" id="cb22-3" title="3">  <span class="dt">char</span> *fmt2;</a>
+<a class="sourceLine" id="cb22-4" title="4"></a>
+<a class="sourceLine" id="cb22-5" title="5">  <span class="cf">if</span> (level &gt; debug_level) <span class="cf">return</span>;</a>
+<a class="sourceLine" id="cb22-6" title="6"></a>
+<a class="sourceLine" id="cb22-7" title="7">  <span class="co">/* Backet fmt with program name and a newline</span></a>
+<a class="sourceLine" id="cb22-8" title="8"><span class="co">     to make it a single write */</span></a>
+<a class="sourceLine" id="cb22-9" title="9">  easprintf(&amp;fmt2, <span class="st">"%s: %s</span><span class="sc">\n</span><span class="st">"</span>, getprogname(), fmt);</a>
+<a class="sourceLine" id="cb22-10" title="10">  va_start(ap, fmt);</a>
+<a class="sourceLine" id="cb22-11" title="11">  vfprintf(stderr, fmt2, ap);</a>
+<a class="sourceLine" id="cb22-12" title="12">  va_end(ap);</a>
+<a class="sourceLine" id="cb22-13" title="13">  efree(fmt2);</a>
+<a class="sourceLine" id="cb22-14" title="14">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="mitigation-strategies"><div>
+<h1>Mitigation Strategies</h1>
+<ol type="1">
+<li>Non-POSIX compliant (e.g., Windows)
+<ul>
+<li>Discarding %n</li>
+<li>Limiting width (e.g., “%.512x” in XP, “%.622496x” in 2000)</li>
+</ul></li>
+<li>Dynamic: enabling FORTIFY in gcc (e.g., Ubuntu)</li>
+<li>Static: code annotation (e.g., Linux)</li>
+</ol>
+</div></section>
+<section class="slide level1" id="defense-5-fortify"><div>
+<h1>Defense 5: FORTIFY</h1>
+<ul>
+<li>Option: -D_FORTIFY_SOURCE=2</li>
+<li>Ensuring that all positional arguments are used
+<ul>
+<li>e.g., %2$d is not ok without %1$d</li>
+</ul></li>
+<li>Ensuring that fmtstr is in the read-only region (when %n)
+<ul>
+<li>e.g., “%n” should not be in a writable region</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb23"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb23-1" title="1">$ <span class="ex">./fortify-yes</span> %2<span class="va">$d</span></a>
+<a class="sourceLine" id="cb23-2" title="2"><span class="ex">***</span> invalid %N$ use detected ***</a>
+<a class="sourceLine" id="cb23-3" title="3"></a>
+<a class="sourceLine" id="cb23-4" title="4">$ <span class="ex">./fortify-yes</span> %n</a>
+<a class="sourceLine" id="cb23-5" title="5"><span class="ex">***</span> %n in writable segment detected ***</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="defense-5-fortify-1"><div>
+<h1>Defense 5: FORTIFY</h1>
+<div class="sourceCode" id="cb24"><pre class="sourceCode diff"><code class="sourceCode diff"><a class="sourceLine" id="cb24-1" title="1">// @lec02-fmtstr/fortify</a>
+<a class="sourceLine" id="cb24-2" title="2">$ make diff</a>
+<a class="sourceLine" id="cb24-3" title="3">...</a>
+<a class="sourceLine" id="cb24-4" title="4"> 0000000000001040 &lt;main&gt;:</a>
+<a class="sourceLine" id="cb24-5" title="5">     1040:  sub    rsp,0x8</a>
+<a class="sourceLine" id="cb24-6" title="6"><span class="st">-    1044:  mov    rdi,QWORD PTR [rsi+0x8]</span></a>
+<a class="sourceLine" id="cb24-7" title="7"><span class="st">-    104a:  call   1030 &lt;printf@plt&gt;</span></a>
+<a class="sourceLine" id="cb24-8" title="8"></a>
+<a class="sourceLine" id="cb24-9" title="9"><span class="va">+    1044:  mov    rsi,QWORD PTR [rsi+0x8]</span></a>
+<a class="sourceLine" id="cb24-10" title="10"><span class="va">+    1048:  mov    edi,0x1</span></a>
+<a class="sourceLine" id="cb24-11" title="11"><span class="va">+    104f:  call   1030 &lt;__printf_chk@plt&gt;</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="printf_chk"><div>
+<h1>__printf_chk()</h1>
+<div class="sourceCode" id="cb25"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb25-1" title="1"><span class="co">// glibc/debug/printf_chk.c</span></a>
+<a class="sourceLine" id="cb25-2" title="2"><span class="dt">int</span> ___printf_chk (<span class="dt">int</span> flag, <span class="dt">const</span> <span class="dt">char</span> *format, ...) {</a>
+<a class="sourceLine" id="cb25-3" title="3">  <span class="dt">va_list</span> ap; <span class="dt">int</span> done;</a>
+<a class="sourceLine" id="cb25-4" title="4"></a>
+<a class="sourceLine" id="cb25-5" title="5">  <span class="cf">if</span> (flag &gt; <span class="dv">0</span>)</a>
+<a class="sourceLine" id="cb25-6" title="6">    stdout-&gt;_flags2 |= _IO_FLAGS2_FORTIFY;</a>
+<a class="sourceLine" id="cb25-7" title="7"></a>
+<a class="sourceLine" id="cb25-8" title="8">  va_start (ap, format);</a>
+<a class="sourceLine" id="cb25-9" title="9">  done = vfprintf (stdout, format, ap);</a>
+<a class="sourceLine" id="cb25-10" title="10">  va_end (ap);</a>
+<a class="sourceLine" id="cb25-11" title="11"></a>
+<a class="sourceLine" id="cb25-12" title="12">  <span class="cf">if</span> (flag &gt; <span class="dv">0</span>)</a>
+<a class="sourceLine" id="cb25-13" title="13">    stdout-&gt;_flags2 &amp;= ~_IO_FLAGS2_FORTIFY;</a>
+<a class="sourceLine" id="cb25-14" title="14"></a>
+<a class="sourceLine" id="cb25-15" title="15">  <span class="cf">return</span> done;</a>
+<a class="sourceLine" id="cb25-16" title="16">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="printf_chk-1"><div>
+<h1>__printf_chk()</h1>
+<ul>
+<li>Ensuring that all positional arguments are used
+<ul>
+<li>e.g., %2$d is not ok without %1$d</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb26"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb26-1" title="1">  <span class="co">// @vprintf()</span></a>
+<a class="sourceLine" id="cb26-2" title="2">  <span class="cf">for</span> (cnt = <span class="dv">0</span>; cnt &lt; nargs; ++cnt)</a>
+<a class="sourceLine" id="cb26-3" title="3">    <span class="cf">switch</span> (args_type[cnt])</a>
+<a class="sourceLine" id="cb26-4" title="4">      ...</a>
+<a class="sourceLine" id="cb26-5" title="5">      <span class="cf">case</span> <span class="dv">-1</span>:</a>
+<a class="sourceLine" id="cb26-6" title="6">        <span class="co">/* Error case.  Not all parameters appear in N$ format</span></a>
+<a class="sourceLine" id="cb26-7" title="7"><span class="co">           strings.  We have no way to determine their type.  */</span></a>
+<a class="sourceLine" id="cb26-8" title="8">        assert (s-&gt;_flags2 &amp; _IO_FLAGS2_FORTIFY);</a>
+<a class="sourceLine" id="cb26-9" title="9">        __libc_fatal (<span class="st">"*** invalid %N$ use detected ***</span><span class="sc">\n</span><span class="st">"</span>);</a>
+<a class="sourceLine" id="cb26-10" title="10">      }</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="printf_chk-2"><div>
+<h1>__printf_chk()</h1>
+<ul>
+<li>Ensuring that fmtstr is in the read-only region (when %n)
+<ul>
+<li>e.g., “%n” should not be in a writable region</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb27"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb27-1" title="1"><span class="co">// @vprintf()</span></a>
+<a class="sourceLine" id="cb27-2" title="2">LABEL (form_number):</a>
+<a class="sourceLine" id="cb27-3" title="3">  <span class="cf">if</span> (s-&gt;_flags2 &amp; _IO_FLAGS2_FORTIFY) {</a>
+<a class="sourceLine" id="cb27-4" title="4">    <span class="cf">if</span> (! readonly_format) {</a>
+<a class="sourceLine" id="cb27-5" title="5">      <span class="kw">extern</span> <span class="dt">int</span> __readonly_area (<span class="dt">const</span> <span class="dt">void</span> *, <span class="dt">size_t</span>);</a>
+<a class="sourceLine" id="cb27-6" title="6">      readonly_format \</a>
+<a class="sourceLine" id="cb27-7" title="7">        = __readonly_area (format, ((STR_LEN (format) + <span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb27-8" title="8">                                     * <span class="kw">sizeof</span> (CHAR_T)));</a>
+<a class="sourceLine" id="cb27-9" title="9">    }</a>
+<a class="sourceLine" id="cb27-10" title="10">    <span class="cf">if</span> (readonly_format &lt; <span class="dv">0</span>)</a>
+<a class="sourceLine" id="cb27-11" title="11">      __libc_fatal (<span class="st">"*** %n in writable segment detected ***</span><span class="sc">\n</span><span class="st">"</span>);</a>
+<a class="sourceLine" id="cb27-12" title="12">  }</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="defense-6-code-annotation-for-compilers"><div>
+<h1>Defense 6: Code Annotation for Compilers</h1>
+<div class="sourceCode" id="cb28"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb28-1" title="1"><span class="co">// @include/linux/compiler_types.h</span></a>
+<a class="sourceLine" id="cb28-2" title="2"><span class="pp">#define __printf(a, b) __attribute__((format(printf, a, b)))</span></a>
+<a class="sourceLine" id="cb28-3" title="3"></a>
+<a class="sourceLine" id="cb28-4" title="4"><span class="kw">extern</span> __printf(<span class="dv">2</span>, <span class="dv">3</span>)</a>
+<a class="sourceLine" id="cb28-5" title="5"><span class="dt">int</span> dev_set_name(<span class="kw">struct</span> device *, <span class="dt">const</span> <span class="dt">char</span> *, ...);</a>
+<a class="sourceLine" id="cb28-6" title="6"></a>
+<a class="sourceLine" id="cb28-7" title="7"><span class="kw">extern</span> __printf(<span class="dv">3</span>, <span class="dv">4</span>)</a>
+<a class="sourceLine" id="cb28-8" title="8"><span class="dt">void</span> __ext4_msg(<span class="kw">struct</span> super_block *, <span class="dt">const</span> <span class="dt">char</span> *, </a>
+<a class="sourceLine" id="cb28-9" title="9">                <span class="dt">const</span> <span class="dt">char</span> *, ...);</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="defense-6-code-annotation-for-compilers-1"><div>
+<h1>Defense 6: Code Annotation for Compilers</h1>
+<div class="sourceCode" id="cb29"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb29-1" title="1"><span class="co">// @lec02-fmtstr/format</span></a>
+<a class="sourceLine" id="cb29-2" title="2">$ cc -g -Wformat test.c -o test</a>
+<a class="sourceLine" id="cb29-3" title="3">&gt; format ‘%d’ expects a matching ‘int’ argument</a>
+<a class="sourceLine" id="cb29-4" title="4">   dev_set_name(<span class="dv">3</span>, <span class="st">"test3: %d %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="dv">1</span>);         <span class="co">/* YES */</span></a>
+<a class="sourceLine" id="cb29-5" title="5">                              ~^</a>
+<a class="sourceLine" id="cb29-6" title="6">&gt; too many arguments <span class="cf">for</span> format</a>
+<a class="sourceLine" id="cb29-7" title="7">   dev_set_name(<span class="dv">3</span>, <span class="st">"test4: %d %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>);   <span class="co">/* YES */</span></a>
+<a class="sourceLine" id="cb29-8" title="8">                   ^~~~~~~~~~~~~~~~</a>
+<a class="sourceLine" id="cb29-9" title="9">&gt; missing $ operand number in format</a>
+<a class="sourceLine" id="cb29-10" title="10">   dev_set_name(<span class="dv">3</span>, <span class="st">"test4: %2$d %d %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="dv">1</span>, <span class="dv">2</span>); <span class="co">/* FALSE */</span></a>
+<a class="sourceLine" id="cb29-11" title="11">                   ^~~~~~~~~~~~~~~~~~~~~</a>
+<a class="sourceLine" id="cb29-12" title="12">&gt; $ operand number used after format without operand number</a>
+<a class="sourceLine" id="cb29-13" title="13">   dev_set_name(<span class="dv">3</span>, <span class="st">"test4: %d %1$d"</span>, <span class="dv">1</span>);         <span class="co">/* FALSE */</span></a>
+<a class="sourceLine" id="cb29-14" title="14">   ^~~~~~~~~~~~</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="references"><div>
+<h1>References</h1>
+<ul>
+<li><a href="https://www.blackhat.com/presentations/bh-europe-09/Fritsch/Blackhat-Europe-2009-Fritsch-Bypassing-aslr-slides.pdf">Bypassing ASLR</a></li>
+<li><a href="http://phrack.org/issues/58/4.html">Advanced return-into-lib(c) exploits</a></li>
+<li><a href="https://crypto.stanford.edu/cs155/papers/formatstring-1.2.pdf">Format string vulnerability</a></li>
+<li><a href="https://link.springer.com/chapter/10.1007/978-3-319-23802-9_23">Blind format string attacks</a></li>
+<li><a href="http://phrack.org/issues/67/9.html">A Eulogy for Format Strings</a></li>
+<li><a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=ffc8b30866879ed9ba62bd0a86fecdbd51cd3d19">CVE-2013-2851</a></li>
+<li><a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8d0c2d10dd72c5292eda7a06231056a4c972e4cc">CVE-2013-1848</a></li>
+<li><a href="http://www.vnsecurity.net/research/2012/02/16/exploiting-sudo-format-string-vunerability.html">CVE-2012-0809</a></li>
+</ul>
+</div></section>
+<div class="progress"><div></div></div>
+<script src="../shower/js/shower.js"></script>
+</body>
+</html>

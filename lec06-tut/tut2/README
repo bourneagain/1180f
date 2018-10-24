@@ -1,0 +1,369 @@
+Libfuzzer is a coverage-based, evolutionary fuzzer. Unlike AFL,
+however, Libfuzzer runs "in-process" (i.e., don't fork). Thus, it can
+easily outperform #exec/s (thus cost of testing) compared with AFL.
+
+It has one fundamental caveat: the testing function, or the way you
+test, should be side-effect free, meaning that no changes of global
+states. It's really up to the developers who run Libfuzzer.
+
+1. Workflow
+===========
+
+Let's take an action:
+
+  $ clang -fsanitize=fuzzer ex1.cc
+  $ ./a.out
+  ...
+
+  ~~~~{.c}
+  // ex1.cc
+  #include <stdint.h>
+  #include <stddef.h>
+
+  extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size > 0 && data[0] == 'H')
+    if (size > 1 && data[1] == 'I')
+      if (size > 2 && data[2] == '!')
+        __builtin_trap();
+    return 0;
+  }
+  ~~~~
+
+Let's first understand how ex1.cc is implemented. The fuzzing always
+starts by invoking LLVMFuzzerTestOneInput() with two arguments, data
+(i.e., mutated input) and its size. For every fuzzing run, Libfuzzer
+follows these steps (similar to AFL):
+
+    1) determine data and size for testing
+    2) run LLVMFuzzerTestOneInput(data, size)
+    3) get the feedback (e.g,. coverage) of the past run
+    4) reflect the feedback to determine next inputs
+
+If the compiled program crashes (e.g., raising SEGFAULT) in the middle
+of 2), it stops, reports and reproduces the tested input for further
+investigation.
+
+Let's understand the output of the fuzzer execution:
+
+  ~~~~{.sh}
+  $ ./a.out
+  INFO: Seed: 107951530
+  INFO: Loaded 1 modules   (8 inline 8-bit counters): 8 [0x55f89f7cac20, 0x55f89f7cac28),
+  INFO: Loaded 1 PC tables (8 PCs): 8 [0x55f89f7cac28,0x55f89f7caca8),
+  INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+  INFO: A corpus is not provided, starting from an empty corpus
+  
+  #2      INITED cov: 2 ft: 2 corp: 1/1b lim: 4 exec/s: 0 rss: 23Mb
+  #52     NEW    cov: 3 ft: 3 corp: 2/3b lim: 4 exec/s: 0 rss: 23Mb L: 2/2 MS: 5 InsertByte-ChangeBinInt-ShuffleBytes-ChangeBit-ChangeBit-
+  #58     NEW    cov: 4 ft: 4 corp: 3/4b lim: 4 exec/s: 0 rss: 23Mb L: 1/2 MS: 1 CrossOver-
+  #200    NEW    cov: 5 ft: 5 corp: 4/7b lim: 4 exec/s: 0 rss: 23Mb L: 3/3 MS: 2 ShuffleBytes-CMP- DE: "I\x00"-
+  #426    NEW    cov: 6 ft: 6 corp: 5/9b lim: 4 exec/s: 0 rss: 23Mb L: 2/3 MS: 1 EraseBytes-
+
+  ==15224== ERROR: libFuzzer: deadly signal
+      #0 0x55f89f7ac8f8 in __sanitizer_print_stack_trace (a.out+0x658f8)
+      #1 0x55f89f7855d9 in fuzzer::PrintStackTrace() (a.out+0x3e5d9)
+      #2 0x55f89f7643be in fuzzer::Fuzzer::CrashCallback() (a.out+0x1d3be)
+      #3 0x55f89f76440f in fuzzer::Fuzzer::StaticCrashSignalCallback() (a.out+0x1d40f)
+      #4 0x7f4023ebe3bf  (/usr/lib/libpthread.so.0+0x123bf)
+      #5 0x55f89f7acd12 in LLVMFuzzerTestOneInput (a.out+0x65d12)
+      #6 0x55f89f764f85 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) (a.out+0x1df85)
+      #7 0x55f89f76776d in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool*) (a.out+0x2076d)
+      #8 0x55f89f7693d9 in fuzzer::Fuzzer::MutateAndTestOne() (a.out+0x223d9)
+      #9 0x55f89f76bdd7 in fuzzer::Fuzzer::Loop(...) (a.out+0x24dd7)
+      #10 0x55f89f75cb22 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) (a.out+0x15b22)
+      ...
+
+  SUMMARY: libFuzzer: deadly signal
+  MS: 1 ChangeByte-; base unit: ae1a7530923c28ee4d7327e923deca6b2e870b3c
+  0x48,0x49,0x21,
+  HI!
+  artifact_prefix='./'; Test unit written to ./crash-7a8dc3985d2a90fb6e62e94910fc11d31949c348
+  Base64: SEkh
+  ~~~~
+
+1) INFO: Seed: 107951530
+
+Have you tried invoking ./a.out multiple times? Have you noticed that
+its output changes in every invocation? It shows that the randomness
+aspect of Libfuzzer. If you want to deterministic reproduce the
+result, you can provide the seed via the "-seed" argument like:
+
+ $ ./a.out -seed=107951530
+
+2) INFO: Loaded 1 modules   (8 inline 8-bit counters): 8 [0x55f89f7cac20, 0x55f89f7cac28),
+   INFO: Loaded 1 PC tables (8 PCs): 8 [0x55f89f7cac28,0x55f89f7caca8),
+
+It shows that #PCs are instrumented (8 PCs) and keeps track of 8-bit
+(255 times) per instrumented branch or edge.
+
+3) INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+   INFO: A corpus is not provided, starting from an empty corpus
+
+-max_len limits the testing input size (upto 4KB by default) and it
+runs without any corpus. If you'd like to add initial inputs, just
+create a corpus directory and provide it via another argument.
+
+  $ mkdir corpus
+  $ echo AAAA > corpus/seed1
+  $ ./a.out corpus
+  ...
+
+4) status line:
+
+     +---> #execution
+     |   +---> status
+  ---+ --+
+  #426 NEW cov: 6 ft: 6 corp: 5/9b lim: 4 exec/s: 0 rss: 23Mb L: 2/3 MS: 1 EraseBytes-
+           -----+ ----+ ---------+ -----+ --------+ --------+ -----+ +---------------
+                |     |          |      |         |         |      | +---> mutation strategies (see more)
+                |     |          |      |         |         |      +---> input size / max size
+                |     |          |      |         |         +---> memory usage
+                |     |          |      |         +---> exec/s (but this run exits too fast)
+                |     |          |      +---> #size limit in this phase, increasing upto -max_len
+                |     |          +---> #corpus in memory (6 inputs), its total size (9 bytes)
+                |     +---> #features (e.g., #edge, counters, etc)
+                +---> coverage of #code block
+
+The mutation strategies are the most interesting field:
+
+      +---> N mutations
+  MS: 1 EraseBytes-
+  MS: 2 ShuffleBytes-CMP- DE: "I\x00"-
+        +----------------> mutation strategies
+
+There are ~15 different mutation strategies implemented in LibFuzzer
+(see, libfuzzer/FuzzerMutate.cpp). Let's take a look on one of them:
+
+  ~~~~{.c}
+  size_t MutationDispatcher::Mutate_ShuffleBytes(uint8_t *Data, size_t Size,
+                                                 size_t MaxSize) {
+    if (Size > MaxSize || Size == 0) return 0;
+    size_t ShuffleAmount =
+        Rand(std::min(Size, (size_t)8)) + 1; // [1,8] and <= Size.
+    size_t ShuffleStart = Rand(Size - ShuffleAmount);
+    assert(ShuffleStart + ShuffleAmount <= Size);
+    std::shuffle(Data + ShuffleStart, Data + ShuffleStart + ShuffleAmount, Rand);
+    return Size;
+  }
+  ~~~~
+
+As the name applies, ShuffleBytes goes over #ShuffleAmount and
+randomly shuffle each bytes ranged from ShuffleStart.
+
+Note that the status line is reported whenever the new coverage is
+found (see "cov:" increasing on every status line).
+
+5) reporting a crash
+
+  ~~~~{.sh}
+  ==15224== ERROR: libFuzzer: deadly signal
+      #0 0x55f89f7ac8f8 in __sanitizer_print_stack_trace (a.out+0x658f8)
+      #1 0x55f89f7855d9 in fuzzer::PrintStackTrace() (a.out+0x3e5d9)
+      #2 0x55f89f7643be in fuzzer::Fuzzer::CrashCallback() (a.out+0x1d3be)
+      #3 0x55f89f76440f in fuzzer::Fuzzer::StaticCrashSignalCallback() (a.out+0x1d40f)
+      #4 0x7f4023ebe3bf  (/usr/lib/libpthread.so.0+0x123bf)
+      #5 0x55f89f7acd12 in LLVMFuzzerTestOneInput (a.out+0x65d12)
+      ...
+
+  SUMMARY: libFuzzer: deadly signal
+  MS: 1 ChangeByte-; base unit: ae1a7530923c28ee4d7327e923deca6b2e870b3c
+  0x48,0x49,0x21,
+  HI!
+  artifact_prefix='./'; Test unit written to ./crash-7a8dc3985d2a90fb6e62e94910fc11d31949c348
+  Base64: SEkh
+  ~~~~
+
+Whenever the fuzzer catches a signal (e.g., SEGFAULT), it stops and
+reports the crashing status like above. In this case, the fuzzer hits
+__builtin_trap(). It also persistently stores the crashing input as a
+file as a result (./crash-7a8dc3985d2a90fb6e62e94910fc11d31949c348).
+
+The crashing input can be individually tested by passing it to the
+instrumented binary.
+
+  $ ./a.out ./crash-7a8dc3985d2a90fb6e62e94910fc11d31949c348
+  ...
+
+2. Internals
+============
+
+Let's explore a few interesting design decision of LibFuzzer:
+
+1) edge coverage
+
+More realistically, you can check if LibFuzzer can find an input for
+strncmp()! In fact, this example indicates that having "edge" coverage
+really helps in finding bugs compared with a simple code coverage.
+
+  $ clang -fsanitize=fuzzer ex2.cc
+  $ ./a.out
+  ...
+
+  ~~~~{.c}
+  // ex2.cc
+  int strncmp(const char *s1, const char *s2, size_t n) {
+    size_t i;
+    int diff;
+  
+    for (i = 0; i < n; i++) {
+      diff = ((unsigned char *) s1)[i] - ((unsigned char *) s2)[i];
+  *   if (diff != 0 || s1[i] == '\0')
+        return diff;
+    }
+    return 0;
+  }
+  ~~~~
+
+2) instrumentation
+
+The limitation of "bruteforcing" is to find an exact input condition
+concretely specified in the conditional branch, like below.
+
+  ~~~~{.c}
+  // ex3.cc
+  extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size > 3 && *(unsigned int *)data == 0xdeadbeef)
+      __builtin_trap();
+    return 0;
+  }
+  ~~~~
+
+What's the chance of "randomly" picking 0xdeadbeef?
+
+  $ clang -fsanitize=fuzzer ex3.cc
+  $ ./a.out
+  ...
+
+You might find that LibFuzzer finds the exact input surprisingly
+quickly! In fact, when instrumenting, LibFuzzer identifies such simple
+comparison and takes them into consideration when mutating the input
+corpus.
+
+  $ objdump -M intel-mnemonic -d a.out
+  ...
+  0000000000065ba0 <LLVMFuzzerTestOneInput>:
+   65ba0:   push   rbp
+   65ba1:   mov    rbp,rsp
+   ...
+   65bf7:   mov    rax,QWORD PTR [rbp-0x8]
+  *65bfb:   mov    ecx,DWORD PTR [rax]
+  *65bfd:   mov    edi,0xdeadbeef
+  *65c02:   mov    esi,ecx
+  *65c04:   mov    DWORD PTR [rbp-0x1c],ecx
+  *65c07:   call   3b9f0 <__sanitizer_cov_trace_const_cmp4>
+   65c0c:   mov    ecx,DWORD PTR [rbp-0x1c]
+   65c0f:   cmp    ecx,0xdeadbeef
+   65c15:   je     65c2e <LLVMFuzzerTestOneInput+0x8e>
+
+You can see one helper function, __sanitizer_cov_trace_const_cmp4(),
+keeps track of the constant, 0xdeadbeef, associated with the cmp
+instruction.
+
+These are just tip of the iceberg. There are non-trivial amount of
+heuristics implemented in LibFuzzer/AFL, making it possible to
+discover new bugs in programs.
+
+3. Finding Heartbleed
+=====================
+
+Let's try to find the Heartbleed bug in openssl!
+
+  ~~~~{.c}
+  // handshake-fuzz.cc
+  extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+    static int unused = Init();
+    SSL *server = SSL_new(sctx);
+    BIO *sinbio = BIO_new(BIO_s_mem());
+    BIO *soutbio = BIO_new(BIO_s_mem());
+    SSL_set_bio(server, sinbio, soutbio);
+    SSL_set_accept_state(server);
+    BIO_write(sinbio, Data, Size);
+    SSL_do_handshake(server);
+    SSL_free(server);
+    return 0;
+  }
+  ~~~~
+
+To test SSL_do_handshake(), we first have to prepare proper
+environments for openssl (e.g., SSL_new), and set up the compatible
+interfaces (e.g., BIO above) that deliver the mutated input to
+SSL_do_handshake().
+
+The instrumentation process is pretty trivial:
+
+  $ cat build.sh
+  ...
+  make CC="clang -g -fsanitize=address -fsanitize-coverage=edge,indirect-calls"
+
+However, since it takes >10 mins for compilation, we already prepared
+the instrumented openssl libraries. Your take is simply to link the
+instrumented library with the fuzzing driver (handshake-fuzz.cc).
+
+  $ ./build.sh
+  $ ./a.out
+  ...
+
+  ~~~~{.sh}
+  ==56944==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x629000009748 at pc 0x0000004dc0a2 bp 0x7ffccc7f4d10 sp 0x7ffccc7f44c0
+  READ of size 21845 at 0x629000009748 thread T0
+      #0 0x4dc0a1 in __asan_memcpy (a.out+0x4dc0a1)
+      #1 0x525d4e in tls1_process_heartbeat openssl-1.0.1f/ssl/t1_lib.c:2586:3
+      #2 0x58f263 in ssl3_read_bytes openssl-1.0.1f/ssl/s3_pkt.c:1092:4
+      #3 0x59380a in ssl3_get_message openssl-1.0.1f/ssl/s3_both.c:457:7
+      #4 0x56103c in ssl3_get_client_hello openssl-1.0.1f/ssl/s3_srvr.c:941:4
+    ...
+
+  0x629000009748 is located 0 bytes to the right of 17736-byte region [0x629000005200,0x629000009748)
+  allocated by thread T0 here:
+      #0 0x4dd1e0 in __interceptor_malloc (a.out+0x4dd1e0)
+      #1 0x5c1a92 in CRYPTO_malloc openssl-1.0.1f/crypto/mem.c:308:8
+
+  SUMMARY: AddressSanitizer: heap-buffer-overflow (a.out+0x4dc0a1) in __asan_memcpy
+  Shadow bytes around the buggy address:
+    0x0c527fff9290: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    0x0c527fff92a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    0x0c527fff92b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    0x0c527fff92c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    0x0c527fff92d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  =>0x0c527fff92e0: 00 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa fa
+    0x0c527fff92f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+    0x0c527fff9300: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+    0x0c527fff9310: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+    0x0c527fff9320: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+    0x0c527fff9330: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  Shadow byte legend (one shadow byte represents 8 application bytes):
+    Addressable:           00
+    Partially addressable: 01 02 03 04 05 06 07
+    Heap left redzone:       fa
+    Freed heap region:       fd
+    Stack left redzone:      f1
+    Stack mid redzone:       f2
+    Stack right redzone:     f3
+    Stack after return:      f5
+    Stack use after scope:   f8
+    Global redzone:          f9
+    Global init order:       f6
+    Poisoned by user:        f7
+    Container overflow:      fc
+    Array cookie:            ac
+    Intra object redzone:    bb
+    ASan internal:           fe
+    Left alloca redzone:     ca
+    Right alloca redzone:    cb
+  ==56944==ABORTING
+  MS: 1 ShuffleBytes-; base unit: bfa5076e7f2d507a9de69111111ede2469bf7555
+  0x18,0x3,0x0,0x0,0x1,0x1,
+  \x18\x03\x00\x00\x01\x01
+  artifact_prefix='./'; Test unit written to ./crash-bfa5076e7f2d507a9de69111111ede2469bf7555
+  Base64: GAMAAAEB
+  ~~~~
+
+Also, you can easily debug this crash by attaching gdb to ./a.out with
+the crashing input.
+
+  $ gdb ./a.out --args
+  > br tls1_process_heartbeat
+  > run ./crash-bfa5076e7f2d507a9de69111111ede2469bf7555
+
+Hope you now understand the potential of using fuzzers and apply to
+what you are developing!

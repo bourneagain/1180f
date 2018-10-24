@@ -1,0 +1,27 @@
+LEC := $(shell basename $(shell realpath .) | awk -F- '{print $$1}')
+PUB := $(shell git rev-parse --show-toplevel)/../seclab-lab/pub
+LAB := lab$(shell echo $(LEC) | cut -b 4-5)
+WEB := ../../web/lec/$(LAB)
+
+all: $(LEC).html
+
+%.html: %.md
+	../shower/shower $<
+
+clean:
+	rm $(LEC).html
+
+dist: $(LEC).html
+	echo chrome --headless --disable-gpu --print-to-pdf=$(LEC).pdf file://$(pwd)/$(LEC).html
+	echo "XXX. chrome headless mode doesn't render print css properly yet!"
+
+	(cd $(PUB); git pull)
+
+	mkdir -p $(WEB)
+	cp $(LEC).pdf $(WEB)/slides.pdf
+	cp $(PUB)/$(LAB)/tut/README $(WEB)/README-tut.txt
+	cp $(PUB)/$(LAB)/README $(WEB)/README-lab.txt
+
+	(cd $(WEB)/../../; touch cal.in; make)
+
+.PHONY: all clean dist

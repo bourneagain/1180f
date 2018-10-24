@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+
+import os
+import re
+import sys
+import subprocess
+import argparse
+
+from PIL import Image
+from bs4 import BeautifulSoup
+
+ROOT = os.path.dirname(__file__)
+
+def fix_path(html, prefix):
+    html = re.sub("</section>", "</div></section>", html)
+    html = re.sub("(<section.*>)", r"\1<div>", html)
+    # html = re.sub('(<code[^>]*>)', r"\1  ", html)
+    html = re.sub('class="incremental"', 'class="next"', html)
+    html = html.replace('<link rel="stylesheet" href="styles',
+                        '<link rel="stylesheet" href="%sstyles' % prefix)
+    html = html.replace('<script src="js/shower.js">',
+                        '<script src="%sjs/shower.js">' % prefix)
+    html = html.replace('<script src="js/jquery-2.2.0.min.js">',
+                        '<script src="%sjs/jquery-2.2.0.min.js">' % prefix)
+    html = html.replace('<section class="footnotes">',
+                        '<section class="footnotes slide">')
+    return html
+
+def fix_indent(lines):
+    rtn = []
+    for l in lines.splitlines():
+        if l.startswith("  "):
+            l = l[2:]
+        rtn.append(l)
+    return "\n".join(rtn)
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("markdown", metavar="M", nargs=1, help="Input")
+    parser.add_argument("--output", default="-", help="Output")
+    parser.add_argument("--prefix", default="-", help="Prefix path")
+    parser.add_argument("-t", "--theme", default="ribbon", help="Theme {default,bright,ribbon}")
+    args = parser.parse_args()
+
+    args.markdown = args.markdown[0]
+
+    # default output
+    if args.output == "-":
+        base = args.markdown.replace(".md", "")
+        base = base.replace(".txt", "")
+        args.output = base + ".html"
+
+    # put absolute path
+    prefix = args.prefix
+    if prefix == "-":
+        args.prefix = os.path.relpath(os.path.abspath(ROOT), os.getcwd()) + "/"
+
+    return args
+
+def split_args(opt):
+    args = []
+    for e in opt.split(","):
+        args.append(e.strip())
+    return args
+
+def preprocess(pn):
+    md = "tmp-%s" % pn
+
+    state_code = False
+
+    with open(md, "w") as fd:
+        for l in open(pn):
+
+            if l.startswith("~~~"):
+                state_code = not state_code
+
+            # NOTE.
+            #  very naive, dangerous!
+
+            # non-code
+            if not state_code:
+                if "<->" in l:
+                    l = l.replace("<->", "&#8596;")
+                if "->" in l:
+                    l = l.replace("->", "&#8594;")
+                if "<-" in l:
+                    l = l.replace("<-", "&#8592;")
+                if "[[" in l:
+                    l = l.replace("[[", "<mark>")
+                if "]]" in l:
+                    l = l.replace("]]", "</mark>")
+                if "=>" in l:
+                    l = l.replace("=>", "->")
+                if "<=" in l:
+                    l = l.replace("<=", "<-")
+
+            if l.startswith(";"):
+                continue
+
+            if l.startswith("@"):
+                fd.write("\n# XXX {.dropme}\n")
+                fd.write("<!-- %s --!>\n\n" % l.strip())
+            elif l.startswith(" @"):
+                m = re.search(r".*@(\w+).*\(([^)]+)\)", str(l))
+                (func, args) = m.groups()
+                # handle "include" before parsing markdown
+                if func == "include":
+                    fd.write(open(args).read())
+                else:
+                    fd.write("\n<div class='dropme'>\n")
+                    fd.write("<!-- %s --!>\n\n" % l.strip())
+                    fd.write("</div>")
+            else:
+                fd.write(l)
+    return md
+
+def writeup_binding(_, opt):
+    out = ["<table class='writeup'>"]
+    for l in open(opt):
+        out.append("<tr>")
+        for t in l.split(":"):
+            t = t.strip()
+            if t.startswith("-"):
+                t = t[1:].strip()
+            out.append("<th>%s</th>" % t)
+        out.append("</tr>")
+    out.append("</table>")
+    return "\n".join(out)
+
+def img2_binding(_, opt):
+    args = split_args(opt)
+    # XXX. bad styling
+    return '<p style="text-align:center;margin:0">' + \
+        '<img src="%s" style="margin-right:50px"></img> <img src="%s"></img></p>' % tuple(args)
+
+def img_binding(_, opt):
+    html = '<img src="%\s></img>'
+    args = split_args(opt)
+    if len(args) == 2:
+        opt = args[0]
+        pn = args[1]
+    else:
+        opt = "fit"
+        pn = args[0]
+
+    fmt = {"src": pn}
+
+    if opt == "fit":
+        style = "width: 100%"
+        if os.path.exists(pn):
+            im = Image.open(pn)
+            (w, h) = im.size
+            im.close()
+            if 0.8 <= w/h <= 1.6:
+                style = "width: 80%"
+            elif w/h < 0.8:
+                style = "height: 100%"
+            else:
+                style = "width: 100%"
+        html = '<p style="text-align:center;margin:0">' + \
+               '<img src="{src}" style="' + style + '"></img></p>'
+
+    elif re.match("w[0-9]+%", opt):
+        html = '<p style="text-align:center;margin:0">' + \
+               '<img src="{src}" style="width:{width}"></img></p>'
+        fmt["width"] = opt[1:]
+
+    elif re.match("h[0-9]+%", opt):
+        html = '<p style="text-align:center;margin:0">' + \
+               '<img src="{src}" style="height:{height}"></img></p>'
+        fmt["height"] = opt[1:]
+        
+    return html.format(**fmt)
+
+global title
+title = ""
+
+def title_binding(_, opt):
+    global title
+    
+    (title, author) = tuple(opt.rsplit(",", 1))
+    
+    size = 60
+    margin = 0;
+    if len(title) > 37:
+        size = 50
+        margin = 1.5
+        
+    html = """\
+<section class="slide" id="cover">
+ <br/><br/><br/><br/>
+ <h2>%s</h2>
+ <p>%s</p>
+ <style>
+ #cover h2 {
+   /* margin:180px 0 0; */
+   color: #666;
+   text-align:center;
+   font-size: %spx;
+   font-weight: bold;
+   margin-bottom: %sem;
+ }
+ #cover p {
+   margin:30px 0 0;
+   text-align:center;
+   font-style:italic;
+   font-size:40px;
+ }
+ </style>
+</section>
+    """ % (title, author, size, margin)
+    return html
+
+def addclass_binding(context, opt):
+    args = split_args(opt)
+
+    parent = context.find_parent("section")["id"]
+    parent = parent.replace(".", "\\\\.")
+
+    return "<script> $('#%s %s').addClass('%s') </script>" \
+        % (parent, args[0], args[1])
+
+def postprocess(out):
+    # create marks
+    marks = {k[:-8]:v for k, v in globals().items() if k.endswith("binding")}
+
+    bs = BeautifulSoup(out, "html.parser")
+    for e in bs.find_all(class_="dropme"):
+        m = re.search(r".*@(\w+).*\(([^)]+)\)", str(e))
+        (func, args) = m.groups()
+
+        snippet = BeautifulSoup(marks[func](e, args), "html.parser")
+        e.insert_after(snippet)
+        e.extract()
+        
+    html = str(bs)
+    html = html.replace("<title>placeholder</title>", "<title>%s</title>" % title)
+    return html
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    md = preprocess(args.markdown)
+    pandoc = ["pandoc",
+              "--template", os.path.join(ROOT, "template.shower"),
+              "-t", "revealjs", md,
+              # just to depress warning
+              #   TODO. new pandoc fixed the title issue, so better to use pandoc's
+              #   instead of doing an ad-hoc manner.
+              "--metadata", "title=title",
+              "-V", "theme=%s" % args.theme]
+    out = subprocess.check_output(pandoc, universal_newlines=True)
+
+    out = fix_path(out, args.prefix)
+    out = fix_indent(out)
+    out = postprocess(out)
+
+    with open(args.output, "w") as fd:
+        fd.write(out)
+
+    os.unlink(md)

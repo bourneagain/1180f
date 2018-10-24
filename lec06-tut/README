@@ -1,0 +1,14 @@
+Tutorial on fuzzing and sanitizers
+----------------------------------
+
+ 1. tut1: afl
+ 2. tut2: libfuzzer
+
+* Refs
+ - http://lcamtuf.coredump.cx/afl/
+ - https://github.com/google/sanitizers
+ - https://fuzzing-project.org/
+ - https://github.com/google/fuzzer-test-suite
+ - https://llvm.org/docs/LibFuzzer.html
+ - https://en.wikipedia.org/wiki/Heartbleed
+ - https://github.com/google/fuzzer-test-suite/blob/master/tutorial/libFuzzerTutorial.md

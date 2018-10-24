@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html$if(lang)$ lang="$lang$"$endif$>
+<head>
+  <title>placeholder</title>
+  <meta charset="utf-8">
+	<meta http-equiv="x-ua-compatible" content="ie=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+$for(author-meta)$
+  <meta name="author" content="$author-meta$" />
+$endfor$
+$if(date-meta)$
+  <meta name="date" content="$date-meta$" />
+$endif$
+  <link rel="stylesheet" href="styles/$if(theme)$$theme$$else$bright$endif$.css">
+$if(highlighting-css)$
+  <style type="text/css">
+$highlighting-css$
+  </style>
+$endif$
+  <style>
+  section pre code {
+    line-height: 1.4 !important;
+    font-size: 20px !important;
+  }
+  .compact code {
+    line-height: 1.4 !important;
+    font-size: 16px !important;
+  }
+  ul.compact {
+    line-height: 1.5 !important;
+    font-size: 20px !important;
+  }
+  .writeup {
+      font-size: 20px !important;
+  }
+  a.sourceLine { background: none !important; }
+  section.region { display: none !important; }
+  pre.numberSource { margin-left: 2em; }
+  div.sourceCode { overflow: hidden; }
+  a.sourceLine::before { text-decoration: none; }
+
+  </style>
+$if(math)$
+  $math$
+$endif$
+$for(header-includes)$
+  $header-includes$
+$endfor$
+$if(duration)$
+  <meta name="duration" content="$duration$" />
+$endif$
+  <script src="js/jquery-2.2.0.min.js"></script>
+</head>
+<body class="shower list">
+
+	<header class="caption">
+		<h1>Security vulnerabilities and their mitigation in native code</h1>
+		<p>Taesoo Kim</p>
+	</header>
+
+$for(include-before)$
+$include-before$
+$endfor$
+
+  $if(title)$
+  <header class="caption">
+    $if(author)$
+    <p class="author">$author$</p>
+    $endif$
+    $if(date)$
+    <p class="date">$date$</p>
+    $endif$
+  </header>
+  $endif$
+
+  $body$
+
+  <div class="progress"><div></div></div>
+  <script src="js/shower.js"></script>
+
+$for(include-after)$
+$include-after$
+$endfor$
+</body>
+</html>

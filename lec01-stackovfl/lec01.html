@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Lec01: Stack Overflow and Protections</title>
+<meta charset="utf-8"/>
+<meta content="ie=edge" http-equiv="x-ua-compatible"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<link href="../shower/styles/ribbon.css" rel="stylesheet"/>
+<style type="text/css">
+a.sourceLine { display: inline-block; line-height: 1.25; }
+a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+a.sourceLine:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode { white-space: pre; position: relative; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+code.sourceCode { white-space: pre-wrap; }
+a.sourceLine { text-indent: -1em; padding-left: 1em; }
+}
+pre.numberSource a.sourceLine
+{ position: relative; left: -4em; }
+pre.numberSource a.sourceLine::before
+{ content: attr(title);
+  position: relative; left: -1em; text-align: right; vertical-align: baseline;
+  border: none; pointer-events: all; display: inline-block;
+  -webkit-touch-callout: none; -webkit-user-select: none;
+  -khtml-user-select: none; -moz-user-select: none;
+  -ms-user-select: none; user-select: none;
+  padding: 0 4px; width: 4em;
+  color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+{  }
+@media screen {
+a.sourceLine::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+<style>
+section pre code {
+  line-height: 1.4 !important;
+  font-size: 20px !important;
+}
+.compact code {
+  line-height: 1.4 !important;
+  font-size: 16px !important;
+}
+ul.compact {
+  line-height: 1.5 !important;
+  font-size: 20px !important;
+}
+.writeup {
+    font-size: 20px !important;
+}
+a.sourceLine { background: none !important; }
+section.region { display: none !important; }
+pre.numberSource { margin-left: 2em; }
+div.sourceCode { overflow: hidden; }
+a.sourceLine::before { text-decoration: none; }
+
+</style>
+<script src="../shower/js/jquery-2.2.0.min.js"></script>
+</head>
+<body class="shower list">
+<header class="caption">
+<h1>Security vulnerabilities and their mitigation in native code</h1>
+<p>Taesoo Kim</p>
+</header>
+<header class="caption">
+</header>
+<section class="slide" id="cover">
+<br/><br/><br/><br/>
+<h2>Lec01: Stack Overflow and Protections</h2>
+<p> Taesoo Kim</p>
+<style>
+ #cover h2 {
+   /* margin:180px 0 0; */
+   color: #666;
+   text-align:center;
+   font-size:60px;
+   font-weight: bold;
+ }
+ #cover p {
+   margin:30px 0 0;
+   text-align:center;
+   font-style:italic;
+   font-size:40px;
+ }
+ </style>
+</section>
+
+<section class="slide level1" id="goals-and-lessons"><div>
+<h1>Goals and Lessons</h1>
+<ul>
+<li>Learn about the stack overflow bugs</li>
+<li>Understand their security implications (i.e., control hijacking)</li>
+<li>Understand the off-the-shelf mitigation (i.e., ssp, DEP, RELO, ASLR)</li>
+<li>Learn them from the real-world examples (i.e., qemu/ruby/wireshark)</li>
+</ul>
+</div></section>
+<section class="slide level1" id="smashing-the-stack-for-fun-and-profit"><div>
+<h1>“Smashing The Stack For Fun And Profit”</h1>
+<p style="text-align:center;margin:0"><img src="img/phrack.png" style="width: 80%"/></p>
+</div></section>
+<section class="slide level1" id="cs101-whats-wrong"><div>
+<h1>CS101: What’s Wrong?</h1>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb1-1" title="1">  main() {</a>
+<a class="sourceLine" id="cb1-2" title="2">    <span class="dt">char</span> buf[<span class="dv">16</span>];</a>
+<a class="sourceLine" id="cb1-3" title="3">    scanf(<span class="st">"%s"</span>, buf);</a>
+<a class="sourceLine" id="cb1-4" title="4">  }</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cs101-whats-wrong-1"><div>
+<h1>CS101: What’s Wrong?</h1>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb2-1" title="1">  main() {</a>
+<a class="sourceLine" id="cb2-2" title="2">    <span class="dt">char</span> buf[<span class="dv">16</span>];</a>
+<a class="sourceLine" id="cb2-3" title="3">    scanf(<span class="st">"%s"</span>, buf);</a>
+<a class="sourceLine" id="cb2-4" title="4">  }</a></code></pre></div>
+<ol type="1">
+<li>scanf(“%s”, &amp;buf)</li>
+<li>scanf(“%16s”, buf)</li>
+<li>scanf(“%15s”, buf)</li>
+<li>scanf(“%as”, &amp;bufptr)</li>
+</ol>
+</div></section>
+<section class="slide level1" id="error-prone-c-apis-scanf"><div>
+<h1>Error-prone C APIs: scanf()</h1>
+<ul>
+<li>scanf(“%15s”, buf) // CORRECT!</li>
+</ul>
+<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb3-1" title="1">$ <span class="bu">cd</span> lec01-stackovfl/apis</a>
+<a class="sourceLine" id="cb3-2" title="2">$ <span class="fu">cat</span> scanf.c</a>
+<a class="sourceLine" id="cb3-3" title="3">$ <span class="fu">make</span></a>
+<a class="sourceLine" id="cb3-4" title="4">$ <span class="ex">./scanf</span></a>
+<a class="sourceLine" id="cb3-5" title="5"><span class="ex">...</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="error-prone-c-apis-scanf-1"><div>
+<h1>Error-prone C APIs: scanf()</h1>
+<ul>
+<li>scanf(“%16s”, buf) // BUG!</li>
+</ul>
+<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb4-1" title="1">$ <span class="ex">./scanf</span></a>
+<a class="sourceLine" id="cb4-2" title="2"><span class="ex">aaaaaaaaaaaaaaaaaaaaaaaaaaaa</span></a>
+<a class="sourceLine" id="cb4-3" title="3"><span class="ex">aaaaaaaaaaaaaaaa</span></a>
+<a class="sourceLine" id="cb4-4" title="4"><span class="ex">01</span>: 61 (a)</a>
+<a class="sourceLine" id="cb4-5" title="5"><span class="ex">02</span>: 61 (a)</a>
+<a class="sourceLine" id="cb4-6" title="6"><span class="ex">...</span></a>
+<a class="sourceLine" id="cb4-7" title="7"><span class="ex">0e</span>: 61 (a)</a>
+<a class="sourceLine" id="cb4-8" title="8"><span class="ex">0f</span>: 61 (a)</a>
+<a class="sourceLine" id="cb4-9" title="9"><span class="ex">10</span>: 61 (a)</a>
+<a class="sourceLine" id="cb4-10" title="10"><span class="ex">11</span>: 00 ()</a>
+<a class="sourceLine" id="cb4-11" title="11"><span class="ex">12</span>: BE ()</a>
+<a class="sourceLine" id="cb4-12" title="12"><span class="ex">13</span>: AD ()</a>
+<a class="sourceLine" id="cb4-13" title="13"><span class="ex">14</span>: DE ()</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="control-hijacking-attack-basic-idea"><div>
+<h1>Control Hijacking Attack: Basic Idea</h1>
+<div class="sourceCode" id="cb5"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb5-1" title="1">  main() {</a>
+<a class="sourceLine" id="cb5-2" title="2">    <span class="dt">char</span> buf[<span class="dv">16</span>];</a>
+<a class="sourceLine" id="cb5-3" title="3">    scanf(<span class="st">"%s"</span>, buf); <span class="co">// </span><span class="al">BUG</span><span class="co">!</span></a>
+<a class="sourceLine" id="cb5-4" title="4">  }</a></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode asm"><code class="sourceCode fasm"><a class="sourceLine" id="cb6-1" title="1">(top, growing)</a>
+<a class="sourceLine" id="cb6-2" title="2">  |&lt;--- current frame --&gt;|&lt;-- caller--&gt;|</a>
+<a class="sourceLine" id="cb6-3" title="3">  [buf           ][fp][ra][...         ]</a>
+<a class="sourceLine" id="cb6-4" title="4">  |&lt;----  <span class="dv">16</span> ---&gt;|</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="control-hijacking-attack-basic-idea-1"><div>
+<h1>Control Hijacking Attack: Basic Idea</h1>
+<div class="sourceCode" id="cb7"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb7-1" title="1">  main() {</a>
+<a class="sourceLine" id="cb7-2" title="2">    <span class="dt">char</span> buf[<span class="dv">16</span>];</a>
+<a class="sourceLine" id="cb7-3" title="3">    scanf(<span class="st">"%s"</span>, buf); <span class="co">// </span><span class="al">BUG</span><span class="co">!</span></a>
+<a class="sourceLine" id="cb7-4" title="4">  }</a></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode asm"><code class="sourceCode fasm"><a class="sourceLine" id="cb8-1" title="1">(top, growing)</a>
+<a class="sourceLine" id="cb8-2" title="2">  |&lt;--- current frame --&gt;|&lt;-- caller--&gt;|</a>
+<a class="sourceLine" id="cb8-3" title="3">  [buf           ][fp][ra][...         ]</a>
+<a class="sourceLine" id="cb8-4" title="4">  |&lt;----  <span class="dv">16</span> ---&gt;|</a>
+<a class="sourceLine" id="cb8-5" title="5">  AAAAAAAAAAAAAAAABBBBCCCC... =&gt;</a>
+<a class="sourceLine" id="cb8-6" title="6"></a>
+<a class="sourceLine" id="cb8-7" title="7">  !SEGFAULT @eip=CCCC</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="control-hijacking-attack-where-to-jump"><div>
+<h1>Control Hijacking Attack: Where to Jump?</h1>
+<ul>
+<li>Jump to the injected code (e.g., stack, environ, etc)</li>
+</ul>
+<div class="sourceCode" id="cb9"><pre class="sourceCode asm"><code class="sourceCode fasm"><a class="sourceLine" id="cb9-1" title="1">(top, growing)</a>
+<a class="sourceLine" id="cb9-2" title="2">  |&lt;--- current frame --&gt;|&lt;-- caller--&gt;|</a>
+<a class="sourceLine" id="cb9-3" title="3">  [buf           ][fp][ra][...         ]</a>
+<a class="sourceLine" id="cb9-4" title="4">  |&lt;----  <span class="dv">16</span> ---&gt;|</a>
+<a class="sourceLine" id="cb9-5" title="5">  AAAAAAAAAAAAAAAABBBBXXXX[shellcode ..]</a>
+<a class="sourceLine" id="cb9-6" title="6">                      |    ^</a>
+<a class="sourceLine" id="cb9-7" title="7">                      +----+ (<span class="dv">1</span>) attacker<span class="st">'s input</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="control-hijacking-attack-where-to-jump-1"><div>
+<h1>Control Hijacking Attack: Where to Jump?</h1>
+<ul>
+<li>Jump to the injected code (e.g., stack, environ, etc)</li>
+</ul>
+<div class="sourceCode" id="cb10"><pre class="sourceCode asm"><code class="sourceCode fasm"><a class="sourceLine" id="cb10-1" title="1">(top, growing)</a>
+<a class="sourceLine" id="cb10-2" title="2">  |&lt;--- current frame --&gt;|</a>
+<a class="sourceLine" id="cb10-3" title="3">  [buf           ][fp][ra] ... [SHELLCODE=...]</a>
+<a class="sourceLine" id="cb10-4" title="4">  |&lt;----  <span class="dv">16</span> ---&gt;|              ^</a>
+<a class="sourceLine" id="cb10-5" title="5">  AAAAAAAAAAAAAAAABBBBXXXX      |</a>
+<a class="sourceLine" id="cb10-6" title="6">                      |         |</a>
+<a class="sourceLine" id="cb10-7" title="7">                      +---------+ (<span class="dv">2</span>) crafted environ</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="control-hijacking-attack-advanced-topics"><div>
+<h1>Control Hijacking Attack: Advanced Topics</h1>
+<ul>
+<li>Stack pivoting when frame pointer is crafted</li>
+<li>Even off-by-one (e.g., writing NULL) is enough for stack pivoting</li>
+</ul>
+<div class="sourceCode" id="cb11"><pre class="sourceCode asm"><code class="sourceCode fasm"><a class="sourceLine" id="cb11-1" title="1">(top, growing)</a>
+<a class="sourceLine" id="cb11-2" title="2">  |&lt;--- current frame --&gt;|&lt;-- caller--&gt;|</a>
+<a class="sourceLine" id="cb11-3" title="3">  [buf           ][fp][ra][...         ]</a>
+<a class="sourceLine" id="cb11-4" title="4">  |&lt;----  <span class="dv">16</span> ---&gt;|</a>
+<a class="sourceLine" id="cb11-5" title="5">(<span class="dv">1</span>)AAAAAAAAAAAAAAAAXXXX -&gt; enough to control (i.e., <span class="bu">leave</span><span class="co">; ret)</span></a>
+<a class="sourceLine" id="cb11-6" title="6">(<span class="dv">2</span>)AAAAAAAAAAAAAAAAX    -&gt; off-by-one</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="memory-safety-in-cc"><div>
+<h1>Memory Safety in C/C++</h1>
+<ul>
+<li>Spatial safety → e.g., buffer over/underflow</li>
+<li>Temporal safety → e.g., use-after-free</li>
+</ul>
+</div></section>
+<section class="slide level1" id="addressing-memory-safety-issues-in-cc"><div>
+<h1>Addressing Memory Safety Issues in C/C++</h1>
+<ul>
+<li>Spatial safety → e.g., buffer over/underflow
+<ul>
+<li>→ Tracking object boundaries and verifying all memory accesses</li>
+</ul></li>
+<li>Temporal safety → e.g., use-after-free
+<ul>
+<li>→ Tracking life time of objects and verifying all memory accesses</li>
+</ul></li>
+</ul>
+<p>Idea in C/C++: if we implement everything <em>correctly</em>, we have opportunities to make the program much efficient (in terms of memory usage) and faster (in terms of execution speed)!</p>
+</div></section>
+<section class="slide level1" id="error-prone-c-apis-strncpy"><div>
+<h1>Error-prone C APIs: strncpy()</h1>
+<ul>
+<li>strncpy(char *dest, const char *src, size_t n)</li>
+</ul>
+<div class="sourceCode" id="cb12"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb12-1" title="1">    <span class="co">// </span><span class="al">BUG</span><span class="co">!</span></a>
+<a class="sourceLine" id="cb12-2" title="2">    <span class="dt">char</span> buf[BUFSIZ];</a>
+<a class="sourceLine" id="cb12-3" title="3">    strncpy(buf, input, <span class="kw">sizeof</span>(buf));</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="error-prone-c-apis-strncpy-1"><div>
+<h1>Error-prone C APIs: strncpy()</h1>
+<ul>
+<li>strncpy(char *dest, const char *src, size_t n)</li>
+</ul>
+<div class="sourceCode" id="cb13"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb13-1" title="1">    <span class="dt">char</span> buf[BUFSIZ];</a>
+<a class="sourceLine" id="cb13-2" title="2">    strncpy(buf, input, <span class="kw">sizeof</span>(buf) - <span class="dv">1</span>);</a>
+<a class="sourceLine" id="cb13-3" title="3">    buf[<span class="kw">sizeof</span>(buf) - <span class="dv">1</span>] = '\<span class="dv">0</span>';</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="error-prone-c-apis-strncpy-2"><div>
+<h1>Error-prone C APIs: strncpy()</h1>
+<ul>
+<li>NULL on the remaining bytes (why?)</li>
+<li>strncpy(buf, “A”*len(buf), buf) → leaving buf non-NULL-terminated</li>
+<li>dest and src should not be overlapping</li>
+<li>Return dest, not #chars copied!</li>
+</ul>
+<div class="sourceCode" id="cb14"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb14-1" title="1">    <span class="dt">char</span>* strncpy(<span class="dt">char</span> *dest, <span class="dt">const</span> <span class="dt">char</span> *src, <span class="dt">size_t</span> n) {</a>
+<a class="sourceLine" id="cb14-2" title="2">      <span class="dt">size_t</span> i;</a>
+<a class="sourceLine" id="cb14-3" title="3">      <span class="cf">for</span> (i = <span class="dv">0</span>; i &lt; n &amp;&amp; src[i] != '\<span class="dv">0</span>'; i++)</a>
+<a class="sourceLine" id="cb14-4" title="4">        dest[i] = src[i];</a>
+<a class="sourceLine" id="cb14-5" title="5">      <span class="cf">for</span> ( ; i &lt; n; i++)</a>
+<a class="sourceLine" id="cb14-6" title="6">        dest[i] = '\<span class="dv">0</span>';</a>
+<a class="sourceLine" id="cb14-7" title="7">      <span class="cf">return</span> dest;</a>
+<a class="sourceLine" id="cb14-8" title="8">    }</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="error-prone-c-apis-strncat"><div>
+<h1>Error-prone C APIs: strncat()</h1>
+<ul>
+<li>dest is always NULL-terminated C-string</li>
+<li>Copy max n + 1 (w/ null)! → strncat(dest, src, len - 1)</li>
+<li>Return dest, not #chars copied!</li>
+</ul>
+<div class="sourceCode" id="cb15"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb15-1" title="1">    <span class="dt">char</span>* strncat(<span class="dt">char</span> *dest, <span class="dt">const</span> <span class="dt">char</span> *src, <span class="dt">size_t</span> n) {</a>
+<a class="sourceLine" id="cb15-2" title="2">      <span class="dt">size_t</span> dest_len = strlen(dest);</a>
+<a class="sourceLine" id="cb15-3" title="3">      <span class="cf">for</span> (<span class="dt">size_t</span> i = <span class="dv">0</span> ; i &lt; n &amp;&amp; src[i] != '\<span class="dv">0</span>' ; i++)</a>
+<a class="sourceLine" id="cb15-4" title="4">        dest[dest_len + i] = src[i];</a>
+<a class="sourceLine" id="cb15-5" title="5">      dest[dest_len + i] = '\<span class="dv">0</span>';</a>
+<a class="sourceLine" id="cb15-6" title="6">      <span class="cf">return</span> dest;</a>
+<a class="sourceLine" id="cb15-7" title="7">    }</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="suggestion-for-c-string-manipulation"><div>
+<h1>Suggestion for C-string manipulation</h1>
+<ul>
+<li>Use: snprintf(buf, sizeof(buf), …)</li>
+<li>Alternatives: strlcpy(), strlcat()
+<ul>
+<li>Return #chars copied, or strlen(dest)</li>
+<li>NULL-terminated, unless dest is full in cast of strlcat()</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="outline"><div>
+<h1>Outline</h1>
+<ul>
+<li>Real-world examples:
+<ol type="1">
+<li>CVE-2017-15118: QEMU</li>
+<li>CVE-2014-4975: Wireshark</li>
+<li>CVE-2015-7547: glibc getaddrinfo()*</li>
+</ol></li>
+<li>Off-the-shelf defenses:
+<ol type="1">
+<li>Stack shield/canary (a.k.a, SSP in gcc)</li>
+<li>DEP (NX, W^X)</li>
+</ol></li>
+<li>Advance defenses: Shadow stack and CET</li>
+</ul>
+</div></section>
+<section class="slide level1" id="cve-2017-15118-qemu"><div>
+<h1>CVE-2017-15118: QEMU</h1>
+<div class="sourceCode" id="cb16"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb16-1" title="1"><span class="pp">#define NBD_MAX_NAME_SIZE 256</span></a>
+<a class="sourceLine" id="cb16-2" title="2"></a>
+<a class="sourceLine" id="cb16-3" title="3"><span class="dt">static</span> <span class="dt">int</span> nbd_negotiate_handle_info(...) {</a>
+<a class="sourceLine" id="cb16-4" title="4">  <span class="dt">char</span> name[NBD_MAX_NAME_SIZE + <span class="dv">1</span>];</a>
+<a class="sourceLine" id="cb16-5" title="5">  <span class="dt">uint32_t</span> namelen;</a>
+<a class="sourceLine" id="cb16-6" title="6"></a>
+<a class="sourceLine" id="cb16-7" title="7">  nbd_read(client-&gt;ioc, &amp;namelen, <span class="kw">sizeof</span>(namelen), errp);</a>
+<a class="sourceLine" id="cb16-8" title="8">  nbd_read(client-&gt;ioc, name, namelen, errp);</a>
+<a class="sourceLine" id="cb16-9" title="9">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2014-4975-ruby"><div>
+<h1>CVE-2014-4975: Ruby</h1>
+<div class="sourceCode" id="cb17"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb17-1" title="1"><span class="dt">void</span> encodes(..) {</a>
+<a class="sourceLine" id="cb17-2" title="2">    <span class="dt">char</span> buff[<span class="dv">4096</span>];</a>
+<a class="sourceLine" id="cb17-3" title="3">    <span class="cf">while</span> (len &gt;= <span class="dv">3</span>) {</a>
+<a class="sourceLine" id="cb17-4" title="4">        <span class="cf">while</span> (len &gt;= <span class="dv">3</span> &amp;&amp; <span class="kw">sizeof</span>(buff)-i &gt;= <span class="dv">4</span>) {</a>
+<a class="sourceLine" id="cb17-5" title="5">            buff[i++] = ..; <span class="co">/* 4 times */</span>;</a>
+<a class="sourceLine" id="cb17-6" title="6">            s += <span class="dv">3</span>;</a>
+<a class="sourceLine" id="cb17-7" title="7">            len -= <span class="dv">3</span>;</a>
+<a class="sourceLine" id="cb17-8" title="8">        }</a>
+<a class="sourceLine" id="cb17-9" title="9">        <span class="cf">if</span> (<span class="kw">sizeof</span>(buff)-i &lt; <span class="dv">4</span>) { <span class="co">/* flush */</span> }</a>
+<a class="sourceLine" id="cb17-10" title="10">    }</a>
+<a class="sourceLine" id="cb17-11" title="11">    <span class="cf">if</span> (len == <span class="dv">2</span>) { ... }</a>
+<a class="sourceLine" id="cb17-12" title="12">    <span class="cf">else</span> <span class="cf">if</span> (len == <span class="dv">1</span>) { ... }</a>
+<a class="sourceLine" id="cb17-13" title="13"></a>
+<a class="sourceLine" id="cb17-14" title="14">    <span class="cf">if</span> (tail_lf) buff[i++] = <span class="ch">'\n'</span>;</a>
+<a class="sourceLine" id="cb17-15" title="15">    <span class="co">/* flush */</span></a>
+<a class="sourceLine" id="cb17-16" title="16">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="then-how-to-prevent-stack-overflow"><div>
+<h1>Then, How to Prevent Stack Overflow?</h1>
+<ul>
+<li>Two approaches:
+<ul>
+<li>Bug prevention (i.e., correct bound checking)</li>
+<li>Exploitation mitigation (i.e., making exploit harder)</li>
+</ul></li>
+</ul>
+<ol type="1">
+<li>Prevent the buffer overflow at the first place
+<ul>
+<li>(e.g., code analysis, designing better APIs)</li>
+</ul></li>
+<li>Protect “integrity” of ra, funcptr, etc (code pointers)
+<ul>
+<li>(e.g., exploitation mitigation → NX, canary)</li>
+</ul></li>
+</ol>
+</div></section>
+<section class="slide level1" id="defense-1-stack-canary"><div>
+<h1>Defense 1: Stack Canary</h1>
+<p style="text-align:center;margin:0"><img src="img/canary-mine.jpg" style="width: 80%"/></p>
+</div></section>
+<section class="slide level1" id="stack-canary-basic-idea"><div>
+<h1>Stack Canary: Basic Idea</h1>
+<ul>
+<li>Use a canary value as an indicator of the integrity of fp/ra</li>
+<li>Check the canary value right before using fp/ra (i.e., ret)</li>
+</ul>
+<div class="sourceCode" id="cb18"><pre class="sourceCode asm"><code class="sourceCode fasm"><a class="sourceLine" id="cb18-1" title="1">(top, growing)</a>
+<a class="sourceLine" id="cb18-2" title="2">  |&lt;--- current frame --&gt;|&lt;-- caller--&gt;|</a>
+<a class="sourceLine" id="cb18-3" title="3">  [buf           ][canary][fp][ra][...         ]</a>
+<a class="sourceLine" id="cb18-4" title="4">  |&lt;----  <span class="dv">16</span> ---&gt;|</a>
+<a class="sourceLine" id="cb18-5" title="5">  AAAAAAAAAAAAAAAA XOXOXO BBBBCCCC... =&gt;</a>
+<a class="sourceLine" id="cb18-6" title="6">                   (corrupted?)</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="subtle-design-choices-for-the-stack-canary"><div>
+<h1>Subtle Design Choices for the Stack Canary</h1>
+<ol type="1">
+<li>Where to put? (e.g., right above ra? fp? local vars?)</li>
+<li>Which value should I use? (e.g., secret? random? per exec? per func?)</li>
+<li>How to check its integrity? (e.g., xor? cmp?)</li>
+<li>What to do after you find corrupted? (e.g., crash? report?)</li>
+</ol>
+</div></section>
+<section class="slide level1" id="gccs-stack-smashing-protector-ssp"><div>
+<h1>GCC’s Stack Smashing Protector (SSP)</h1>
+<ul>
+<li>Options: -fstack-protector/all/strong/explicit
+<ul>
+<li>Scope: all &gt;&gt; strong &gt;&gt; default &gt;&gt; explicit</li>
+<li>e.g., use of alloca(), buffer, array, etc</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb19"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb19-1" title="1">$ <span class="bu">cd</span> lec01-stackovfl/ssp</a>
+<a class="sourceLine" id="cb19-2" title="2">$ <span class="fu">cat</span> ssp.c</a>
+<a class="sourceLine" id="cb19-3" title="3">$ <span class="fu">make</span> check-sspopts</a>
+<a class="sourceLine" id="cb19-4" title="4"><span class="ex">...</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="case-study-using-ssp-in-linux-3.14"><div>
+<h1>Case Study: Using SSP in Linux (&gt; 3.14)</h1>
+<ul>
+<li>-fstack-protector:
+<ul>
+<li>0.33% larger code size</li>
+<li>2.81% of the functions covered</li>
+</ul></li>
+<li>-fstack-protector-strong:
+<ul>
+<li>2.4% larger code size</li>
+<li>20.5% of the functions covered</li>
+</ul></li>
+</ul>
+<p>ref. <a class="uri" href="https://lwn.net/Articles/584225/">https://lwn.net/Articles/584225/</a></p>
+</div></section>
+<section class="slide level1" id="ssp-in-detail-instrumentation"><div>
+<h1>SSP in Detail: Instrumentation</h1>
+<div class="sourceCode" id="cb20"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb20-1" title="1"><span class="dt">int</span> func1_benign(<span class="dt">int</span> arg) { <span class="cf">return</span> arg; }</a>
+<a class="sourceLine" id="cb20-2" title="2"></a>
+<a class="sourceLine" id="cb20-3" title="3">$ ./check-func.py ssp-explicit func1_benign</a>
+<a class="sourceLine" id="cb20-4" title="4">func1_benign()@ssp-explicit</a>
+<a class="sourceLine" id="cb20-5" title="5">  push   rbp</a>
+<a class="sourceLine" id="cb20-6" title="6">  mov    rbp,rsp</a>
+<a class="sourceLine" id="cb20-7" title="7">  mov    DWORD PTR [rbp<span class="bn">-0x4</span>],edi</a>
+<a class="sourceLine" id="cb20-8" title="8">  mov    eax,DWORD PTR [rbp<span class="bn">-0x4</span>]</a>
+<a class="sourceLine" id="cb20-9" title="9">  pop    rbp</a>
+<a class="sourceLine" id="cb20-10" title="10">  ret</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="ssp-in-detail-instrumentation-1"><div>
+<h1>SSP in Detail: Instrumentation</h1>
+<div class="sourceCode" id="cb21"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb21-1" title="1">$ ./check-func.py ssp-all func1_benign</a>
+<a class="sourceLine" id="cb21-2" title="2">func1_benign()@ssp-all</a>
+<a class="sourceLine" id="cb21-3" title="3">  push   rbp</a>
+<a class="sourceLine" id="cb21-4" title="4">  mov    rbp,rsp</a>
+<a class="sourceLine" id="cb21-5" title="5">  sub    rsp,<span class="bn">0x20</span></a>
+<a class="sourceLine" id="cb21-6" title="6">  mov    DWORD PTR [rbp<span class="bn">-0x14</span>],edi</a>
+<a class="sourceLine" id="cb21-7" title="7">! mov    rax,QWORD PTR fs:<span class="bn">0x28</span>     <span class="co">// read canary @TLS</span></a>
+<a class="sourceLine" id="cb21-8" title="8">! mov    QWORD PTR [rbp<span class="bn">-0x8</span>],rax   <span class="co">// put it right above fp</span></a>
+<a class="sourceLine" id="cb21-9" title="9">! xor    eax,eax                   <span class="co">// clear it off</span></a>
+<a class="sourceLine" id="cb21-10" title="10">  mov    eax,DWORD PTR [rbp<span class="bn">-0x14</span>]</a>
+<a class="sourceLine" id="cb21-11" title="11">! mov    rdx,QWORD PTR [rbp<span class="bn">-0x8</span>]   <span class="co">// fetch canary on stack</span></a>
+<a class="sourceLine" id="cb21-12" title="12">! xor    rdx,QWORD PTR fs:<span class="bn">0x28</span>     <span class="co">// compare it with @TLS</span></a>
+<a class="sourceLine" id="cb21-13" title="13">! je     func1_benign+<span class="bn">0x31</span></a>
+<a class="sourceLine" id="cb21-14" title="14">! call   __stack_chk_fail@plt      <span class="co">// stack smashed!</span></a>
+<a class="sourceLine" id="cb21-15" title="15">  leave</a>
+<a class="sourceLine" id="cb21-16" title="16">  ret</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="ssp-in-detail-in-action"><div>
+<h1>SSP in Detail: In Action</h1>
+<ul>
+<li>Any interesting byte in canary?</li>
+</ul>
+<div class="sourceCode" id="cb22"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb22-1" title="1">$ <span class="ex">./canary</span></a>
+<a class="sourceLine" id="cb22-2" title="2"><span class="ex">0x7ffd4d8e4278</span>: 0xa                 // saved arg</a>
+<a class="sourceLine" id="cb22-3" title="3"><span class="ex">0x7ffd4d8e4280</span>: 0x100000000         // dummy</a>
+<a class="sourceLine" id="cb22-4" title="4"><span class="ex">0x7ffd4d8e4288</span>: 0xdace23a197bb3d00  // canary</a>
+<a class="sourceLine" id="cb22-5" title="5"><span class="ex">0x7ffd4d8e4290</span>: 0x7ffd4d8e42c0      // fp</a>
+<a class="sourceLine" id="cb22-6" title="6"><span class="ex">0x7ffd4d8e4298</span>: 0x55d3082a51fc      // ra</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="about-terminator-canary"><div>
+<h1>About “Terminator” Canary</h1>
+<ul>
+<li>Why is the terminator canary special?
+<ul>
+<li>0x0d000aff: NULL (0x00), CR (0x0d), LF (0x0a) and EOF (0xff)</li>
+</ul></li>
+<li>SSP: Used to contain NULL/EOF/LF (06/2014, see <a href="https://github.molgen.mpg.de/git-mirror/glibc/commit/4a103975c4c4929455d60224101013888640cd2f">commit</a>)</li>
+<li>SSP: Only contains NULL (<span class="citation" data-cites="MSB">@MSB</span>) in a recent version</li>
+</ul>
+</div></section>
+<section class="slide level1" id="ssp-__stack_chk_fail"><div>
+<h1>SSP: __stack_chk_fail()</h1>
+<ul>
+<li>Immediately abort the program like below:</li>
+</ul>
+<div class="sourceCode" id="cb23"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb23-1" title="1">$ <span class="bu">cd</span> lec01-stackovfl/ssp</a>
+<a class="sourceLine" id="cb23-2" title="2">$ <span class="ex">./ovfl</span> </a>
+<a class="sourceLine" id="cb23-3" title="3"><span class="ex">***</span> stack smashing detected ***: ./ovfl terminated</a>
+<a class="sourceLine" id="cb23-4" title="4"><span class="ex">Aborted</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="ssp-__stack_chk_fail-implementation"><div>
+<h1>SSP: __stack_chk_fail() Implementation</h1>
+<div class="sourceCode" id="cb24"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb24-1" title="1"><span class="co">// @debug/stack_chk_fail.c</span></a>
+<a class="sourceLine" id="cb24-2" title="2"><span class="dt">void</span> __attribute__ ((noreturn)) </a>
+<a class="sourceLine" id="cb24-3" title="3">__stack_chk_fail (<span class="dt">void</span>) {</a>
+<a class="sourceLine" id="cb24-4" title="4">  __fortify_fail (<span class="st">"stack smashing detected"</span>);</a>
+<a class="sourceLine" id="cb24-5" title="5">}</a>
+<a class="sourceLine" id="cb24-6" title="6"></a>
+<a class="sourceLine" id="cb24-7" title="7"><span class="dt">void</span> __attribute__ ((noreturn)) </a>
+<a class="sourceLine" id="cb24-8" title="8">__fortify_fail (<span class="dt">const</span> <span class="dt">char</span> *msg) {</a>
+<a class="sourceLine" id="cb24-9" title="9">  __libc_message (<span class="dv">2</span>, <span class="st">"*** %s ***: %s terminated</span><span class="sc">\n</span><span class="st">"</span>,</a>
+<a class="sourceLine" id="cb24-10" title="10">                  msg, __libc_argv[<span class="dv">0</span>] ?: <span class="st">"&lt;unknown&gt;"</span>);</a>
+<a class="sourceLine" id="cb24-11" title="11">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="ssp-security-issue-in-__stack_chk_fail"><div>
+<h1>SSP: Security Issue in __stack_chk_fail()</h1>
+<ul>
+<li><a href="https://sourceware.org/bugzilla/show_bug.cgi?id=12189">CVE-2010-3192</a>: Arbitrary read after stack smashing
+<ul>
+<li>__libc_argv[0] is under control</li>
+<li>Breaking confidentiality, e.g., leaking private keys</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="ssp-new-implementation"><div>
+<h1>SSP: New Implementation</h1>
+<div class="sourceCode" id="cb25"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb25-1" title="1">    <span class="co">/* Don't pass down __libc_argv[0] if we aren't doing backtrace</span></a>
+<a class="sourceLine" id="cb25-2" title="2"><span class="co">       since __libc_argv[0] may point to the corrupted stack.  */</span></a>
+<a class="sourceLine" id="cb25-3" title="3">    __libc_message (need_backtrace ? </a>
+<a class="sourceLine" id="cb25-4" title="4">                     (do_abort | do_backtrace) : do_abort,</a>
+<a class="sourceLine" id="cb25-5" title="5">            <span class="st">"*** %s ***: %s terminated</span><span class="sc">\n</span><span class="st">"</span>,</a>
+<a class="sourceLine" id="cb25-6" title="6">            msg,</a>
+<a class="sourceLine" id="cb25-7" title="7">            (need_backtrace &amp;&amp; __libc_argv[<span class="dv">0</span>] != NULL</a>
+<a class="sourceLine" id="cb25-8" title="8">             ? __libc_argv[<span class="dv">0</span>] : <span class="st">"&lt;unknown&gt;"</span>));</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="ssp-placing-local-variables"><div>
+<h1>SSP: Placing Local Variables</h1>
+<div class="sourceCode" id="cb26"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb26-1" title="1">  <span class="dt">long</span> var1[<span class="dv">32</span>] = {<span class="dv">1</span>, };</a>
+<a class="sourceLine" id="cb26-2" title="2">  <span class="dt">int</span> (*var2)(<span class="dt">const</span> <span class="dt">char</span> *) = system;</a>
+<a class="sourceLine" id="cb26-3" title="3">  <span class="dt">long</span> var3 = <span class="dv">3</span>;</a></code></pre></div>
+<div class="sourceCode" id="cb27"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb27-1" title="1">$ <span class="bu">cd</span> lec01-stackovfl/ssp</a>
+<a class="sourceLine" id="cb27-2" title="2">$ <span class="fu">make</span> check-loc</a>
+<a class="sourceLine" id="cb27-3" title="3"><span class="fu">func1_benign()</span><span class="bu">:</span></a>
+<a class="sourceLine" id="cb27-4" title="4">  <span class="ex">0x7ffd6375c580</span>: 0x1 (var1)</a>
+<a class="sourceLine" id="cb27-5" title="5">  <span class="ex">0x7ffd6375c588</span>: 0x2 (var2)</a>
+<a class="sourceLine" id="cb27-6" title="6">  <span class="ex">0x7ffd6375c590</span>: 0x3 (var3)</a>
+<a class="sourceLine" id="cb27-7" title="7"><span class="ex">...</span></a>
+<a class="sourceLine" id="cb27-8" title="8"><span class="fu">func5_buf_and_funcptr()</span><span class="bu">:</span></a>
+<a class="sourceLine" id="cb27-9" title="9">  <span class="ex">0x7ffd6375c480</span>: 0x7f5a62ecf380 (var2)</a>
+<a class="sourceLine" id="cb27-10" title="10">  <span class="ex">0x7ffd6375c488</span>: 0x3 (var3)</a>
+<a class="sourceLine" id="cb27-11" title="11">  <span class="ex">0x7ffd6375c490</span>: 0x1 (var1)</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="limitation-of-canary-based-approaches"><div>
+<h1>Limitation of Canary-based Approaches</h1>
+<ol type="1">
+<li>Unprotected local variables (e.g., index, func ptrs)</li>
+<li>Incrementally overwriting one byte at a time (in remote, fork())</li>
+<li>Leaked canary (per execution)</li>
+</ol>
+</div></section>
+<section class="slide level1" id="defense-2-dep-nx-wx"><div>
+<h1>Defense 2: DEP (NX, W^X)</h1>
+<ul>
+<li>Data Execution Prevention (DEP)
+<ul>
+<li>aka, Non eXecutable, Writable ^ eXecutable</li>
+<li>Basically, don’t make writable region executable at the same time</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb28"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb28-1" title="1"><span class="fu">cat</span> /proc/self/maps </a>
+<a class="sourceLine" id="cb28-2" title="2"><span class="ex">5606bdf09000-5606bdf0b000</span> r--p /usr/bin/cat</a>
+<a class="sourceLine" id="cb28-3" title="3"><span class="ex">5606bdf0b000-5606bdf0f000</span> r-xp /usr/bin/cat</a>
+<a class="sourceLine" id="cb28-4" title="4"><span class="ex">5606bdf13000-5606bdf14000</span> rw-p /usr/bin/cat</a>
+<a class="sourceLine" id="cb28-5" title="5"><span class="ex">...</span></a>
+<a class="sourceLine" id="cb28-6" title="6"><span class="ex">5606bef45000-5606bef66000</span> rw-p [heap]</a>
+<a class="sourceLine" id="cb28-7" title="7"><span class="ex">7ffcd93c8000-7ffcd93ea000</span> rw-p [stack]</a>
+<a class="sourceLine" id="cb28-8" title="8"><span class="ex">7ffcd93f7000-7ffcd93fa000</span> r--p [vvar]</a>
+<a class="sourceLine" id="cb28-9" title="9"><span class="ex">7ffcd93fa000-7ffcd93fc000</span> r-xp [vdso]</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="advance-defense-1-shadow-stack"><div>
+<h1>Advance Defense 1: Shadow Stack</h1>
+<ul>
+<li>Option: -fsanitize=shadow-call-stack
+<ul>
+<li>Replicate return addresses in a safe place, so called shadow stack</li>
+<li>The shadow stack directly indicates modification of return addresses</li>
+</ul></li>
+</ul>
+<pre><code>       (top) +--------------+
+             |              v XXXX
+&lt;stack&gt;  : [buf][canary][fp][ra][var][canary][fp][ra] ... (@rsp)
+&lt;shadow&gt; :                  [ra]                 [ra] ... (@gs)</code></pre>
+</div></section>
+<section class="slide level1" id="advance-defense-1-shadow-stack-1"><div>
+<h1>Advance Defense 1: Shadow Stack</h1>
+<div class="sourceCode" id="cb30"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb30-1" title="1"><span class="dt">void</span> vuln(<span class="dt">char</span> *arg) { <span class="dt">char</span> buf[<span class="dv">32</span>]; ... }</a></code></pre></div>
+<div class="sourceCode" id="cb31"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb31-1" title="1">$ <span class="bu">cd</span> lec01-stackovfl/safestack</a>
+<a class="sourceLine" id="cb31-2" title="2">$ <span class="fu">make</span> check-shadowstack</a>
+<a class="sourceLine" id="cb31-3" title="3"><span class="ex">-vuln</span>()<span class="ex">@shadowstack-no</span></a>
+<a class="sourceLine" id="cb31-4" title="4"><span class="ex">+vuln</span>()<span class="ex">@shadowstack-yes</span></a>
+<a class="sourceLine" id="cb31-5" title="5"><span class="ex">+</span>  mov    r10,QWORD PTR [rsp]</a>
+<a class="sourceLine" id="cb31-6" title="6"><span class="ex">+</span>  xor    r11,r11</a>
+<a class="sourceLine" id="cb31-7" title="7"><span class="ex">+</span>  add    QWORD PTR gs:[r11],0x8</a>
+<a class="sourceLine" id="cb31-8" title="8"><span class="ex">+</span>  mov    r11,QWORD PTR gs:[r11]</a>
+<a class="sourceLine" id="cb31-9" title="9"><span class="ex">+</span>  mov    QWORD PTR gs:[r11],r10</a>
+<a class="sourceLine" id="cb31-10" title="10">   <span class="ex">push</span>   rbp</a>
+<a class="sourceLine" id="cb31-11" title="11">   <span class="ex">mov</span>    rbp,rsp</a>
+<a class="sourceLine" id="cb31-12" title="12">   <span class="ex">sub</span>    rsp,0x40</a>
+<a class="sourceLine" id="cb31-13" title="13"><span class="ex">...</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="advance-defense-2-safe-stack"><div>
+<h1>Advance Defense 2: Safe Stack</h1>
+<ul>
+<li>Option: -fsanitize=safe-stack</li>
+<li>Two stacks: safe/unsafe stacks for sensitive/non-sensitive data
+<ul>
+<li>Preventing stack overflow to the sensitive data</li>
+<li>Disentangling the leakage of stack pointers</li>
+</ul></li>
+</ul>
+<pre><code>          (top)
+&lt;stack&gt;  : [buf][canary][fp][ra][var][canary][fp][ra] ... (@rsp)
+
+&lt;safe&gt;   : [fp][ra][fp][ra] ...                           (@rsp)
+&lt;unsafe&gt; : [buf][canary][var][canary] ...                 (@fs)
+            ======&gt; overflow doesn't affect fp/ra + other sensative data</code></pre>
+</div></section>
+<section class="slide level1" id="advance-defense-2-safe-stack-1"><div>
+<h1>Advance Defense 2: Safe Stack</h1>
+<div class="sourceCode" id="cb33"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb33-1" title="1"><span class="dt">void</span> vuln(<span class="dt">char</span> *arg) { <span class="dt">char</span> buf[<span class="dv">32</span>]; ... }</a></code></pre></div>
+<div class="sourceCode" id="cb34"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb34-1" title="1">$ <span class="bu">cd</span> lec01-stackovfl/safestack</a>
+<a class="sourceLine" id="cb34-2" title="2">$ <span class="fu">make</span> check-safestack</a>
+<a class="sourceLine" id="cb34-3" title="3"><span class="ex">-vuln</span>()<span class="ex">@safestack-no</span></a>
+<a class="sourceLine" id="cb34-4" title="4"><span class="ex">+vuln</span>()<span class="ex">@safestack-yes</span></a>
+<a class="sourceLine" id="cb34-5" title="5">   <span class="ex">push</span>   rbp</a>
+<a class="sourceLine" id="cb34-6" title="6">   <span class="ex">mov</span>    rbp,rsp</a>
+<a class="sourceLine" id="cb34-7" title="7"><span class="ex">-</span>  sub    rsp,0x40</a>
+<a class="sourceLine" id="cb34-8" title="8"><span class="ex">+</span>  sub    rsp,0x20</a>
+<a class="sourceLine" id="cb34-9" title="9"><span class="ex">+</span>  mov    rax,QWORD PTR [rip+0x8271] <span class="kw">;</span> <span class="bu">read</span> <span class="va">the</span> <span class="va">base</span> <span class="va">of</span> <span class="va">stacktop</span></a>
+<a class="sourceLine" id="cb34-10" title="10"><span class="ex">+</span>  mov    rcx,QWORD PTR fs:[rax]     <span class="kw">;</span> <span class="ex">fetch</span> stacktop</a>
+<a class="sourceLine" id="cb34-11" title="11"><span class="ex">+</span>  mov    rdx,rcx</a>
+<a class="sourceLine" id="cb34-12" title="12"><span class="ex">+</span>  add    rdx,0xffffffffffffffd0     <span class="kw">;</span> <span class="ex">allocate</span></a>
+<a class="sourceLine" id="cb34-13" title="13"><span class="ex">+</span>  mov    QWORD PTR fs:[rax],rdx     <span class="kw">;</span> <span class="ex">update</span> stacktop</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="references"><div>
+<h1>References</h1>
+<ul>
+<li><a href="http://phrack.org/issues/49/14.html">Smashing The Stack For Fun And Profit</a></li>
+<li><a href="http://phrack.org/issues/67/13.html">Scraps of notes on remote stack overflow exploitation</a></li>
+<li><a href="https://www.coresecurity.com/system/files/publications/2016/05/StackguardPaper.pdf">Bypassing StackShield</a></li>
+<li><a href="https://www.blackhat.com/docs/eu-16/materials/eu-16-Goktas-Bypassing-Clangs-SafeStack.pdf">Bypassing Safe Stack</a></li>
+</ul>
+</div></section>
+<div class="progress"><div></div></div>
+<script src="../shower/js/shower.js"></script>
+</body>
+</html>

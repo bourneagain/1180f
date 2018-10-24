@@ -1,0 +1,82 @@
+// Bright theme for Shower HTML presentation engine: github.com/shower/shower
+// Copyright © 2010–2013 Vadim Makeev, pepelsbey.net
+// Licensed under MIT license: github.com/shower/shower/wiki/MIT-License
+
+// Colors
+$color:#52A2DF;
+
+// Layout
+$top:80px;     // Top padding above slide content
+$left:128px;    // Left slide content padding
+$right:96px;    // Right slide content padding
+$sides:120px;  // Left and right paddings around slide content
+$break:1180px;  // Window width for small thumbnails to appear
+$ratio:'16x10';
+
+$blue:#4B86C2;
+$grey:#2A2B2D;
+$yellow:#FAFAA2;
+
+// Slide Dimentions
+$width:1024px;
+$height:640px;
+
+// Mixins
+@mixin retina {
+	@media (-webkit-min-device-pixel-ratio:2), (min-resolution:192dpi) {
+		@content;
+		}
+	}
+
+@mixin tab-size($n) {
+	-moz-tab-size:$n;
+	-o-tab-size:$n;
+	tab-size:$n;
+	}
+
+@mixin transform($n) {
+	-webkit-transform:$n;
+	-moz-transform:$n;
+	-ms-transform:$n;
+	-o-transform:$n;
+	transform:$n;
+	}
+
+@mixin transform-origin($n) {
+	-webkit-transform-origin:$n;
+	-moz-transform-origin:$n;
+	-ms-transform-origin:$n;
+	-o-transform-origin:$n;
+	transform-origin:$n;
+	}
+
+@mixin transition($n) {
+	-webkit-transition:$n;
+	-moz-transition:$n;
+	-o-transition:$n;
+	transition:$n;
+	}
+
+// Underline
+@mixin underline($color, $width) {
+	background:
+		linear-gradient(
+			to top,
+			$color,
+			$color #{$width}em,
+			transparent #{$width}em,
+			transparent
+		) repeat-x;
+	}
+
+// Offscreen
+@mixin offscreen {
+	position:absolute;
+	clip:rect(0 0 0 0);
+	overflow:hidden;
+	margin:-1px;
+	padding:0;
+	width:1px;
+	height:1px;
+	border:none;
+	}

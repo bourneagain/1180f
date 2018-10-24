@@ -1,0 +1,347 @@
+AFL is a coverage-based, evolutionary fuzzer as we discussed in the
+lecture. In this tutorial, we'd like to learn the workflow of applying
+fuzzers and explore its internals with a few examples.
+
+1. Workflow
+===========
+
+We first have to instrument the program, allowing us to extract the
+coverage map efficiently in every fuzzing invocation.
+
+  $ cd tut1
+  $ afl-gcc ex1.cc
+  afl-cc 2.52b by <lcamtuf@google.com>
+  afl-as 2.52b by <lcamtuf@google.com>
+  [+] Instrumented 9 locations (64-bit, non-hardened mode, ratio 100%).
+                   ----------> 9 basic blocks are instrumented
+                             
+Instead of using gcc, you can use afl-gcc, a wrapper script that
+enables instrumentation seamlessly without disturbing the building
+process. In a standard automake-like building environment, you can
+easily inject this compiler option via CC=afl-gcc or CC=afl-clang.
+
+  ~~~~{.c}
+  // ex1.cc
+  int main(int argc, char *argv[]) {
+    char data[100] = {0};
+    size_t size = read(0, data, 100);
+  
+    if (size > 0 && data[0] == 'H')
+      if (size > 1 && data[1] == 'I')
+         if (size > 2 && data[2] == '!')
+         __builtin_trap();
+    
+    return 0;
+  }
+  ~~~~
+
+  $ ./a.out
+  HI!
+  Illegal instruction
+
+Indeed, ./a.out behaves like a normal program if invoked: instrumented
+parts are not activated unless we invoke the program with afl-fuzz, a
+fuzzing driver. Let's first check how this binary is instrumented by AFL.
+
+  $ nm a.out | grep afl_
+  00000004080 b __afl_area_ptr
+  00000000000017ae t __afl_die
+  0000000000004090 b __afl_fork_pid
+  ...
+
+  $ objdump -d a.out | grep afl_maybe_log
+  7fd:   e8 7e 03 00 00          callq  b80 <__afl_maybe_log>
+  871:   e8 0a 03 00 00          callq  b80 <__afl_maybe_log>
+  8b5:   e8 c6 02 00 00          callq  b80 <__afl_maybe_log>
+  8ed:   e8 8e 02 00 00          callq  b80 <__afl_maybe_log>
+  ...
+
+You would realize that __afl_maybe_log() in invoked in every basic
+blocks (see, img/afl-inst.png), in total 9 times! Each basic block is
+uniquely identified with a random number:
+
+  1118:       48 89 14 24             mov    QWORD PTR [rsp],rdx
+  111c:       48 89 4c 24 08          mov    QWORD PTR [rsp+0x8],rcx
+  1121:       48 89 44 24 10          mov    QWORD PTR [rsp+0x10],rax
+ *1126:       48 c7 c1 e4 69 00 00    mov    rcx,0x69e4
+  112d:       e8 6e 03 00 00          call   14a0 <__afl_maybe_log>
+
+The goal of the fuzzer is to find the input, "HI!". Let's see how AFL
+generates such an input, quite magically! To do so, we need to provide
+an initial input corpus and prepare the output directory. We'd like to
+start the fuzzing with "AAAA" as input, and expect AFL to convert
+"AAAA" into "HI!" that crashes the program (__builtin_trap())!
+
+  $ mkdir input output
+  $ echo AAAA > input/test
+  $ afl-fuzz -i input -o output ./a.out
+  ...
+
+                        american fuzzy lop 2.52b (a.out)
++- process timing -------------------------------------+- overall results -----+
+|        run time : 0 days, 0 hrs, 0 min, 30 sec       |  cycles done : 100    |
+|   last new path : 0 days, 0 hrs, 0 min, 29 sec       |  total paths : 4      |
+| last uniq crash : 0 days, 0 hrs, 0 min, 29 sec       | uniq crashes : 1      |
+|  last uniq hang : none seen yet                      |   uniq hangs : 0      |
++- cycle progress --------------------+- map coverage -+-----------------------+
+|  now processing : 2 (50.00%)        |    map density : 0.01% / 0.02%         |
+| paths timed out : 0 (0.00%)         | count coverage : 1.00 bits/tuple       |
++- stage progress --------------------+- findings in depth --------------------+
+|  now trying : havoc                 | favored paths : 4 (100.00%)            |
+| stage execs : 237/256 (92.58%)      |  new edges on : 4 (100.00%)            |
+| total execs : 121k                  | total crashes : 6 (1 unique)           |
+|  exec speed : 3985/sec              |  total tmouts : 0 (0 unique)           |
++- fuzzing strategy yields -----------+---------------+- path geometry --------+
+|   bit flips : 1/104, 1/100, 0/92                    |    levels : 3          |
+|  byte flips : 0/13, 0/9, 0/3                        |   pending : 0          |
+| arithmetics : 1/728, 0/0, 0/0                       |  pend fav : 0          |
+|  known ints : 0/70, 0/252, 0/132                    | own finds : 3          |
+|  dictionary : 0/0, 0/0, 0/0                         |  imported : n/a        |
+|       havoc : 1/120k, 0/0                           | stability : 100.00%    |
+|        trim : 20.00%/1, 0.00%                       +------------------------+
++-----------------------------------------------------+          [cpu000:  10%]
+
+
+There are a few interesting information in AFL's CUI:
+ (ref. lec06-tut/afl-2.52b/docs/status_screen.txt)
+
+1) Overall results:
+
+  +-----------------------+
+  |  cycles done : 100    |
+  |  total paths : 4      |
+  | uniq crashes : 1      |
+  |   uniq hangs : 0      |
+  +-----------------------+
+
+- cycles done: the count of queue passes done so far, meaning that the
+  number of times that AFL went over all the interesting test cases.
+- total paths: how many test cases discovered so far
+- unique crashes/hangs: how many crashes/hangs discovered so far
+
+2) Map coverage
+
+  +- map coverage -+-----------------------+
+  |    map density : 0.01% / 0.02%         |
+  | count coverage : 1.00 bits/tuple       |
+  +- findings in depth --------------------+
+
+- map density of the current input (left) and all inputs (right)
+- count coverage: the variability in tuple hit counts seen in the binary
+
+3) Stage progress
+
+  +- stage progress --------------------+
+  |  now trying : havoc                 |
+  | stage execs : 237/256 (92.58%)      |
+  | total execs : 121k                  |
+  |  exec speed : 3985/sec              |
+  +- fuzzing strategy yields -----------+
+
+This describes the progress of the current stage: e.g., which fuzzing
+strategy is applied and how much this stage is completed.
+
+  (from document)
+  - havoc - a sort-of-fixed-length cycle with stacked random tweaks. The
+    operations attempted during this stage include bit flips, overwrites with
+    random and "interesting" integers, block deletion, block duplication, plus
+    assorted dictionary-related operations (if a dictionary is supplied in the
+    first place).
+
+4) Fuzzing strategy yields
+
+  +- fuzzing strategy yields ---------------------------+
+  |   bit flips : 1/104, 1/100, 0/92                    |
+  |  byte flips : 0/13, 0/9, 0/3                        |
+  | arithmetics : 1/728, 0/0, 0/0                       |
+  |  known ints : 0/70, 0/252, 0/132                    |
+  |  dictionary : 0/0, 0/0, 0/0                         |
+  |       havoc : 1/120k, 0/0                           |
+  |        trim : 20.00%/1, 0.00%                       |
+  +-----------------------------------------------------+
+
+It summarizes that how each strategies yield a new path: e.g., bit
+flips, havoc and arithmetics found new paths, helping us to determine
+which strategies work for our fuzzing target.
+
+2. Challenge: finding a security bug!
+=====================================
+
+Using AFL, we can reveal non-trivial security bugs without having a
+deep understanding of the target program. Today's target is a toy
+program called "registration" that is carefully implemented to contain
+a bug for education purpose.
+
+Can you spot any bugs in "registration.c" via code auditing? Indeed,
+it's not too easy to find one, so let's try to use AFL.
+
+1) Instrumentation
+
+  $ CC=afl-gcc make
+  $ ./registration
+  ...
+
+2) Generating seed inputs
+
+Let's manually explore this toy program while collecting what we are typing.
+
+  $ mkdir input
+  $ tee input/test1 | ./registration 
+  ...
+  $ tee input/test2 | ./registration 
+  ...
+
+3) Fuzzing time!
+
+  $ afl-fuzz -i input -o output -- ./registration
+
+In fact, the fuzzer fairly quickly finds a few crashing inputs! You
+can easily analyze them by manually injecting the crashing input to
+the program or by running it with gdb.
+
+  $ cat output/crashes/id:000001,sig:06,src:000001,op:flip2,pos:18 | ./registration
+  ...
+  [*] Unregister course :(
+  - Give me an index to choose                                                                                                                                  
+  double free or corruption (fasttop)
+  zsh: abort      ./registration
+
+  $ gdb registration
+  (gdb) run < output/crashes/id:000000,sig:06,src:000000...
+  ...
+  (gdb) bt
+  #0  0x00007ffff7defd7f in raise () from /usr/lib/libc.so.6
+  #1  0x00007ffff7dda672 in abort () from /usr/lib/libc.so.6
+  #2  0x00007ffff7e32878 in __libc_message () from /usr/lib/libc.so.6
+  #3  0x00007ffff7e3918a in malloc_printerr () from /usr/lib/libc.so.6
+  #4  0x00007ffff7e3ab27 in _int_free () from /usr/lib/libc.so.6
+  #5  0x0000555555556309 in unregister_course () at registration.c:110
+  #6  0x000055555555722d in main () at registration.c:173
+
+(Have you spotted the exploitable security bug!?)
+
+4) Better analysis with AddressSanitizer (asan)
+
+You can enable ASAN simply by setting AFL_USE_ASAN=1:
+
+ $ AFL_USE_ASAN=1 CC=afl-clang make
+
+ $ ./registration < output/crashes/id:000000,sig:06,src:000000...
+ ...
+ =================================================================
+  ==20957==ERROR: AddressSanitizer: heap-use-after-free on address 0x603000000020 at pc 0x562a7aadc3f9 bp 0x7ffee576f8f0 sp 0x7ffee576f8e8
+  READ of size 8 at 0x603000000020 thread T0
+    #0 0x562a7aadc3f8 in register_course tut1/registration.c:63:21
+    #1 0x562a7aade3d8 in main tut1/registration.c:170:17
+    #2 0x7f1c00605222 in __libc_start_main (/usr/lib/libc.so.6+0x24222)
+    #3 0x562a7a9cb0ed in _start (tut1/registration+0x1f0ed)
+
+  0x603000000020 is located 16 bytes inside of 32-byte region [0x603000000010,0x603000000030)
+  freed by thread T0 here:
+    #0 0x562a7aa9de61 in __interceptor_free (tut1/registration+0xf1e61)
+    #1 0x562a7aadcf28 in unregister_course tut1/registration.c:111:5
+    #2 0x562a7aade3e2 in main tut1/registration.c:173:17
+    #3 0x7f1c00605222 in __libc_start_main (/usr/lib/libc.so.6+0x24222)
+
+  previously allocated by thread T0 here:
+    #0 0x562a7aa9e249 in malloc (tut1/registration+0xf2249)
+    #1 0x562a7aadc0c5 in new_student tut1/registration.c:16:31
+    #2 0x562a7aadc0c5 in register_course tut1/registration.c:56
+    #3 0x562a7aade3d8 in main tut1/registration.c:170:17
+    #4 0x7f1c00605222 in __libc_start_main (/usr/lib/libc.so.6+0x24222)
+
+  SUMMARY: AddressSanitizer: heap-use-after-free tut1/registration.c:63:21 in register_course
+  Shadow bytes around the buggy address:
+    0x0c067fff7fb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    0x0c067fff7fc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    0x0c067fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    0x0c067fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    0x0c067fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  =>0x0c067fff8000: fa fa fd fd[fd]fd fa fa 00 00 00 00 fa fa fa fa
+    0x0c067fff8010: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+    0x0c067fff8020: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+    0x0c067fff8030: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+    0x0c067fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+    0x0c067fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  Shadow byte legend (one shadow byte represents 8 application bytes):
+    Addressable:           00
+    Partially addressable: 01 02 03 04 05 06 07
+    Heap left redzone:       fa
+    Freed heap region:       fd
+    Stack left redzone:      f1
+    Stack mid redzone:       f2
+    Stack right redzone:     f3
+    Stack after return:      f5
+    Stack use after scope:   f8
+    Global redzone:          f9
+    Global init order:       f6
+    Poisoned by user:        f7
+    Container overflow:      fc
+    Array cookie:            ac
+    Intra object redzone:    bb
+    ASan internal:           fe
+    Left alloca redzone:     ca
+    Right alloca redzone:    cb
+    Shadow gap:              cc
+  ==20957==ABORTING
+
+With ASAN, the program indeed stops at a different place: stopping in
+register_course() unlike aborting when free()-ing in
+unregister_course(). ASAN really helps in pinpointing the root cause
+of the security problem.
+
+
+3. Understanding the limitations of AFL
+=======================================
+
+1) #unique bugs
+
+  ~~~~{.c}
+  // ex2.cc
+  int strncmp(const char *s1, const char *s2, size_t n) {
+    size_t i;
+    int diff;
+  
+    for (i = 0; i < n; i++) {
+  *   diff = ((unsigned char *) s1)[i] - ((unsigned char *) s2)[i];
+  *   if (diff != 0 || s1[i] == '\0')
+  *     return diff;
+    }
+    return 0;
+  }
+  ~~~~
+
+  $ afl-gcc ex2.cc
+  $ afl-fuzz -i input -o output ./a.out
+  ...
+
+You will notice that, at this time, it quickly reports more than one
+unique crash, although all crashes are essentially same. This is
+mainly because AFL considers each input unique when each input results
+in a different coverage map (i.e., edge). Each iteration of the for
+loop (*) in strncmp() is considered unique path.
+
+2) Tight conditional constraints
+
+  ~~~~{.c}
+  // ex3.cc
+  int main(int argc, char *argv[]) {
+    char data[100] = {0};
+    size_t size = read(0, data, 100);
+    if (size > 3 && *(unsigned int *)data == 0xdeadbeef)
+      __builtin_trap();
+    return 0;
+  }
+  ~~~~
+
+  $ afl-gcc ex3.cc
+  $ afl-fuzz -i input -o output ./a.out
+  ...
+
+Even after a few minutes, it's unlikely that the fuzzer randomly picks
+0xdeadbeef as an interesting input. This indicates the important role
+of the seeding input: flip as much as branches possible with the seed
+inputs so the fuzzer can focus on discovering crashing inputs.
+
+In the next tutorial, we will learn about libFuzzer that is designed
+to overcome this particular limitation.

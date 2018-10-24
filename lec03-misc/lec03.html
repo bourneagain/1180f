@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Lec03: Integer overflow, race conditions, and uninitialized reads</title>
+<meta charset="utf-8"/>
+<meta content="ie=edge" http-equiv="x-ua-compatible"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<link href="../shower/styles/ribbon.css" rel="stylesheet"/>
+<style type="text/css">
+a.sourceLine { display: inline-block; line-height: 1.25; }
+a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+a.sourceLine:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode { white-space: pre; position: relative; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+code.sourceCode { white-space: pre-wrap; }
+a.sourceLine { text-indent: -1em; padding-left: 1em; }
+}
+pre.numberSource a.sourceLine
+{ position: relative; left: -4em; }
+pre.numberSource a.sourceLine::before
+{ content: attr(title);
+  position: relative; left: -1em; text-align: right; vertical-align: baseline;
+  border: none; pointer-events: all; display: inline-block;
+  -webkit-touch-callout: none; -webkit-user-select: none;
+  -khtml-user-select: none; -moz-user-select: none;
+  -ms-user-select: none; user-select: none;
+  padding: 0 4px; width: 4em;
+  color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+{  }
+@media screen {
+a.sourceLine::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+<style>
+section pre code {
+  line-height: 1.4 !important;
+  font-size: 20px !important;
+}
+.compact code {
+  line-height: 1.4 !important;
+  font-size: 16px !important;
+}
+ul.compact {
+  line-height: 1.5 !important;
+  font-size: 20px !important;
+}
+.writeup {
+    font-size: 20px !important;
+}
+a.sourceLine { background: none !important; }
+section.region { display: none !important; }
+pre.numberSource { margin-left: 2em; }
+div.sourceCode { overflow: hidden; }
+a.sourceLine::before { text-decoration: none; }
+
+</style>
+<script src="../shower/js/jquery-2.2.0.min.js"></script>
+</head>
+<body class="shower list">
+<header class="caption">
+<h1>Security vulnerabilities and their mitigation in native code</h1>
+<p>Taesoo Kim</p>
+</header>
+<header class="caption">
+</header>
+<section class="slide" id="cover">
+<br/><br/><br/><br/>
+<h2>Lec03: Integer overflow, race conditions, and uninitialized reads</h2>
+<p> Taesoo Kim</p>
+<style>
+ #cover h2 {
+   /* margin:180px 0 0; */
+   color: #666;
+   text-align:center;
+   font-size: 50px;
+   font-weight: bold;
+   margin-bottom: 1.5em;
+ }
+ #cover p {
+   margin:30px 0 0;
+   text-align:center;
+   font-style:italic;
+   font-size:40px;
+ }
+ </style>
+</section>
+
+<section class="slide level1" id="goals-and-lessons"><div>
+<h1>Goals and Lessons</h1>
+<ul>
+<li>Learn about three classes of vulnerabilities
+<ol type="1">
+<li>Integer overflow (undefined behavior)</li>
+<li>Race condition</li>
+<li>Uninitialized reads</li>
+</ol></li>
+<li>Understand their security implications</li>
+<li>Understand the off-the-shelf mitigation</li>
+<li>Learn them from the real-world examples</li>
+</ul>
+</div></section>
+<section class="slide level1" id="basic-idea-integer-representation"><div>
+<h1>Basic Idea: Integer Representation</h1>
+<ol start="30" type="I">
+<li>(from phrack)</li>
+</ol>
+</div></section>
+<section class="slide level1" id="integer-overflow-real-life-impacts"><div>
+<h1>Integer Overflow Real Life Impacts</h1>
+<ul>
+<li>1996: Ariane 5 rocket crashed</li>
+<li>2015: FAA requested to reset Boeing 787 every 248 days</li>
+<li>2016: a Casino machine printed a prize ticket of $42,949,672!</li>
+</ul>
+</div></section>
+<section class="slide level1" id="cs101-int.-ovfl.-and-undefined-behavior"><div>
+<h1>CS101: Int. Ovfl. and Undefined Behavior</h1>
+<ul>
+<li>(in 64-bit) what does the expression, 1 &gt; 0, evaluate to?
+<ul>
+<li>? (a) 0, (b) 1, (c) NaN, (d) -1</li>
+</ul></li>
+<li>(unsigned short)1 &gt; -1?
+<ul>
+<li>? (a) 1, (b) 0, (c) -1, (d) undefined</li>
+</ul></li>
+<li>-1U &gt; 0?
+<ul>
+<li>? (a) 1, (b) 0, (c) -1, (d) undefined</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="q."><div>
+<h1>Q.</h1>
+<ul>
+<li>-1L &gt; 1U? on x86-64 and x86
+<ul>
+<li>? (a) 0 on both platforms, (b) 1 on both platforms, (c) 0 on x86-64, 1 on x86, (d) 1 on x86-64, 0 on x86</li>
+</ul></li>
+<li>UINT_MAX + 1?
+<ul>
+<li>? (a) 0, (b) 1, (c) INT_MAX, (d) UINT_MAX, (e) undefined</li>
+</ul></li>
+<li>(in 32-bit) what’s abs(-2147483648)?
+<ul>
+<li>? (a) == 0, (b) &lt; 0, (c) &gt; 0, (d) == NaN</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="discussion-intq"><div>
+<h1>Discussion: intq</h1>
+<ul>
+<li>-1 &lt;&lt; 2?
+<ul>
+<li>? (a) 0, (b) 4, (c) INT_MAX, (d) INT_MIN, (e) undefined</li>
+</ul></li>
+<li>INT_MAX + 1?
+<ul>
+<li>? (a) 0, (b) 1, (c) INT_MAX, (d) UINT_MAX, (e) undefined</li>
+</ul></li>
+<li>-INT_MIN?
+<ul>
+<li>? (a) 0, (b) 1, (c) INT_MAX, (d) UINT_MAX, (e) INT_MIN, (f) undefined</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="secure-way-to-add-two-ints"><div>
+<h1>Secure Way to Add Two Ints</h1>
+<ul>
+<li><a href="https://wiki.sei.cmu.edu/confluence/display/c/INT32-C.+Ensure+that+operations+on+signed+integers+do+not+result+in+overflow">SEI CERT C Coding Standard</a></li>
+</ul>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb1-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
+<a class="sourceLine" id="cb1-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> sum = si_a + si_b;</a>
+<a class="sourceLine" id="cb1-3" title="3">  <span class="co">/* ... */</span></a>
+<a class="sourceLine" id="cb1-4" title="4">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="secure-way-to-add-two-ints-1"><div>
+<h1>Secure Way to Add Two Ints</h1>
+<div class="sourceCode" id="cb2"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb2-1" title="1"><span class="pp">#include </span><span class="im">&lt;limits.h&gt;</span></a>
+<a class="sourceLine" id="cb2-2" title="2">  </a>
+<a class="sourceLine" id="cb2-3" title="3"><span class="dt">void</span> f(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
+<a class="sourceLine" id="cb2-4" title="4">  <span class="dt">signed</span> <span class="dt">int</span> sum;</a>
+<a class="sourceLine" id="cb2-5" title="5">  <span class="cf">if</span> (((si_b &gt; <span class="dv">0</span>) &amp;&amp; (si_a &gt; (INT_MAX - si_b))) ||</a>
+<a class="sourceLine" id="cb2-6" title="6">      ((si_b &lt; <span class="dv">0</span>) &amp;&amp; (si_a &lt; (INT_MIN - si_b)))) {</a>
+<a class="sourceLine" id="cb2-7" title="7">    <span class="co">/* Handle error */</span></a>
+<a class="sourceLine" id="cb2-8" title="8">  } <span class="cf">else</span> {</a>
+<a class="sourceLine" id="cb2-9" title="9">    sum = si_a + si_b;</a>
+<a class="sourceLine" id="cb2-10" title="10">  }</a>
+<a class="sourceLine" id="cb2-11" title="11">  <span class="co">/* ... */</span></a>
+<a class="sourceLine" id="cb2-12" title="12">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="secure-way-to-multiplying-two-ints"><div>
+<h1>Secure Way to Multiplying Two Ints</h1>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb3-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
+<a class="sourceLine" id="cb3-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> result = si_a * si_b;</a>
+<a class="sourceLine" id="cb3-3" title="3">  <span class="co">/* ... */</span></a>
+<a class="sourceLine" id="cb3-4" title="4">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="secure-way-to-multiplying-two-ints-1"><div>
+<h1>Secure Way to Multiplying Two Ints</h1>
+<div class="sourceCode" id="cb4"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb4-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
+<a class="sourceLine" id="cb4-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> result;</a>
+<a class="sourceLine" id="cb4-3" title="3">  <span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span> tmp;</a>
+<a class="sourceLine" id="cb4-4" title="4"></a>
+<a class="sourceLine" id="cb4-5" title="5">  tmp = (<span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span>)si_a * (<span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span>)si_b;</a>
+<a class="sourceLine" id="cb4-6" title="6">  </a>
+<a class="sourceLine" id="cb4-7" title="7">  <span class="co">/* If the product cannot be represented as a 32-bit integer,</span></a>
+<a class="sourceLine" id="cb4-8" title="8"><span class="co">     handle as an error condition. */</span></a>
+<a class="sourceLine" id="cb4-9" title="9">  <span class="cf">if</span> ((tmp &gt; INT_MAX) || (tmp &lt; INT_MIN)) {</a>
+<a class="sourceLine" id="cb4-10" title="10">    <span class="co">/* Handle error */</span></a>
+<a class="sourceLine" id="cb4-11" title="11">  } <span class="cf">else</span> {</a>
+<a class="sourceLine" id="cb4-12" title="12">    result = (<span class="dt">int</span>)tmp;</a>
+<a class="sourceLine" id="cb4-13" title="13">  }</a>
+<a class="sourceLine" id="cb4-14" title="14">  <span class="co">/* ... */</span></a>
+<a class="sourceLine" id="cb4-15" title="15">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="secure-way-to-multiplying-two-ints-2"><div>
+<h1>Secure Way to Multiplying Two Ints</h1>
+<p style="text-align:center;margin:0"><img src="img/mult.png" style="width:60%"/></p>
+</div></section>
+<section class="slide level1" id="case-study-chackra-core-multiplying-ints"><div>
+<h1>Case Study: Chackra Core (Multiplying Ints)</h1>
+<div class="sourceCode" id="cb5"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb5-1" title="1"><span class="co">// Returns true if we overflowed, false if we didn't</span></a>
+<a class="sourceLine" id="cb5-2" title="2"><span class="dt">bool</span> Int64Math::Mul(int64 left, int64 right, int64 *pResult) {</a>
+<a class="sourceLine" id="cb5-3" title="3"><span class="pp">#if defined(_M_X64) </span></a>
+<a class="sourceLine" id="cb5-4" title="4">  <span class="co">// (I)MUL (Q/64) R[D/A]X &lt;- RAX * r/m64</span></a>
+<a class="sourceLine" id="cb5-5" title="5">  int64 high;</a>
+<a class="sourceLine" id="cb5-6" title="6">  *pResult = _mul128(left, right, &amp;high);</a>
+<a class="sourceLine" id="cb5-7" title="7">  <span class="cf">return</span> ((*pResult &gt; <span class="dv">0</span>) &amp;&amp; high != <span class="dv">0</span>) \</a>
+<a class="sourceLine" id="cb5-8" title="8">           || ((*pResult &lt; <span class="dv">0</span>) &amp;&amp; (high != <span class="dv">-1</span>));</a>
+<a class="sourceLine" id="cb5-9" title="9"><span class="pp">#else</span></a>
+<a class="sourceLine" id="cb5-10" title="10">  *pResult = left * right;</a>
+<a class="sourceLine" id="cb5-11" title="11">  <span class="cf">return</span> (left != <span class="dv">0</span> &amp;&amp; right != <span class="dv">0</span> \</a>
+<a class="sourceLine" id="cb5-12" title="12">           &amp;&amp; (*pResult / left) != right);</a>
+<a class="sourceLine" id="cb5-13" title="13"><span class="pp">#endif</span></a>
+<a class="sourceLine" id="cb5-14" title="14">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="case-study-glibc-multiplying-uints"><div>
+<h1>Case Study: glibc (Multiplying UInts)</h1>
+<div class="sourceCode" id="cb6"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb6-1" title="1"><span class="dt">static</span> <span class="kw">inline</span> <span class="dt">bool</span></a>
+<a class="sourceLine" id="cb6-2" title="2">check_mul_overflow_size_t(<span class="dt">size_t</span> left, <span class="dt">size_t</span> right, </a>
+<a class="sourceLine" id="cb6-3" title="3">                          <span class="dt">size_t</span> *result) {</a>
+<a class="sourceLine" id="cb6-4" title="4">  <span class="co">/* size_t is unsigned </span></a>
+<a class="sourceLine" id="cb6-5" title="5"><span class="co">     so the behavior on overflow is defined. */</span></a>
+<a class="sourceLine" id="cb6-6" title="6">  *result = left * right;</a>
+<a class="sourceLine" id="cb6-7" title="7">  <span class="dt">size_t</span> half_size_t \</a>
+<a class="sourceLine" id="cb6-8" title="8">    = ((<span class="dt">size_t</span>) <span class="dv">1</span>) &lt;&lt; (<span class="dv">8</span> * <span class="kw">sizeof</span> (<span class="dt">size_t</span>) / <span class="dv">2</span>);</a>
+<a class="sourceLine" id="cb6-9" title="9"></a>
+<a class="sourceLine" id="cb6-10" title="10">  <span class="cf">if</span> ((left | right) &gt;= half_size_t) {</a>
+<a class="sourceLine" id="cb6-11" title="11">    <span class="cf">if</span> (right != <span class="dv">0</span> &amp;&amp; *result / right != left)</a>
+<a class="sourceLine" id="cb6-12" title="12">      <span class="cf">return</span> true;</a>
+<a class="sourceLine" id="cb6-13" title="13">  }</a>
+<a class="sourceLine" id="cb6-14" title="14">  <span class="cf">return</span> false;</a>
+<a class="sourceLine" id="cb6-15" title="15">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="new-proposals-__builtin__overflow"><div>
+<h1>New Proposals: __builtin_*_overflow()</h1>
+<ul>
+<li>Ref. <a class="uri" href="https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html">https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html</a></li>
+</ul>
+<div class="sourceCode" id="cb7"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb7-1" title="1"><span class="dt">bool</span> __builtin_add_overflow (type1 a, type2 b, type3 *res);</a>
+<a class="sourceLine" id="cb7-2" title="2"><span class="dt">bool</span> __builtin_sub_overflow (type1 a, type2 b, type3 *res);</a>
+<a class="sourceLine" id="cb7-3" title="3"><span class="dt">bool</span> __builtin_mul_overflow (type1 a, type2 b, type3 *res);</a>
+<a class="sourceLine" id="cb7-4" title="4"></a>
+<a class="sourceLine" id="cb7-5" title="5"><span class="dt">bool</span> __builtin_uadd_overflow (<span class="dt">unsigned</span> <span class="dt">int</span> a, <span class="dt">unsigned</span> <span class="dt">int</span> b,</a>
+<a class="sourceLine" id="cb7-6" title="6">                              <span class="dt">unsigned</span> <span class="dt">int</span> *res);</a>
+<a class="sourceLine" id="cb7-7" title="7">...</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="example-new-calloc"><div>
+<h1>Example: New calloc()</h1>
+<div class="sourceCode" id="cb8"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb8-1" title="1"><span class="dt">void</span> * calloc (<span class="dt">size_t</span> x, <span class="dt">size_t</span> y) {</a>
+<a class="sourceLine" id="cb8-2" title="2">  <span class="dt">size_t</span> sz;</a>
+<a class="sourceLine" id="cb8-3" title="3">  <span class="cf">if</span> (__builtin_mul_overflow (x, y, &amp;sz))</a>
+<a class="sourceLine" id="cb8-4" title="4">    <span class="cf">return</span> NULL;</a>
+<a class="sourceLine" id="cb8-5" title="5">  <span class="dt">void</span> *ret = malloc (sz);</a>
+<a class="sourceLine" id="cb8-6" title="6">  <span class="cf">if</span> (ret)</a>
+<a class="sourceLine" id="cb8-7" title="7">    memset (ret, <span class="dv">0</span>, sz);</a>
+<a class="sourceLine" id="cb8-8" title="8">  <span class="cf">return</span> ret;</a>
+<a class="sourceLine" id="cb8-9" title="9">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="undefined-behaviors-and-optimization"><div>
+<h1>Undefined Behaviors and Optimization</h1>
+<ul>
+<li>ref. https://kristerw.blogspot.com/2016/02/how-undefined-signed-overflow-enables.html</li>
+<li>ref. https://nullprogram.com/blog/2018/07/20/</li>
+<li>-fwrapv</li>
+<li>-fno-strict-aliasing</li>
+</ul>
+</div></section>
+<section class="slide level1" id="double-fetching-vulnerabilities"><div>
+<h1>Double Fetching Vulnerabilities</h1>
+<ul>
+<li>A special form of race conditions: user vs. kernel spaces</li>
+<li>Leading to information leaks, buffer overflows, etc.</li>
+</ul>
+<p style="text-align:center;margin:0"><img src="img/doublefetch.png" style="width:95%"/></p>
+</div></section>
+<section class="slide level1" id="example-perf_copy_attr-explained"><div>
+<h1>Example: perf_copy_attr() Explained</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch1.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="example-perf_copy_attr-explained-1"><div>
+<h1>Example: perf_copy_attr() Explained</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch2.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="example-perf_copy_attr-explained-2"><div>
+<h1>Example: perf_copy_attr() Explained</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch3.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="bug-racing-in-userspace"><div>
+<h1>BUG: Racing in Userspace</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch5.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="bug-double-fetching-from-kernel"><div>
+<h1>BUG: “Double” Fetching from Kernel</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch6.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="bug-trigger-incorrect-memory-copy"><div>
+<h1>BUG: Trigger Incorrect Memory Copy</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch7.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="fixing-double-fetches"><div>
+<h1>Fixing Double Fetches</h1>
+<ul>
+<li>Partialy reading after the size attribute</li>
+<li>Ensuring the atomicity of previous checked size</li>
+</ul>
+<div class="sourceCode" id="cb9"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb9-1" title="1">  <span class="co">// @f12f42acdbb577a12eecfcebbbec41c81505c4dc</span></a>
+<a class="sourceLine" id="cb9-2" title="2">  ret = get_user(size, &amp;uattr-&gt;size);</a>
+<a class="sourceLine" id="cb9-3" title="3">  ret = copy_from_user(attr, uattr, size);</a>
+<a class="sourceLine" id="cb9-4" title="4">  ...</a>
+<a class="sourceLine" id="cb9-5" title="5"></a>
+<a class="sourceLine" id="cb9-6" title="6">  <span class="co">// overwrite with the sanitiy-checked size</span></a>
+<a class="sourceLine" id="cb9-7" title="7">+ attr-&gt;size = size; </a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2009-3234-buffer-overflow"><div>
+<h1>CVE-2009-3234: Buffer Overflow!</h1>
+<div class="sourceCode" id="cb10"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb10-1" title="1">  <span class="co">/* If we're handed a bigger struct than we know of,</span></a>
+<a class="sourceLine" id="cb10-2" title="2"><span class="co">   * ensure all the unknown bits are 0.  */</span></a>
+<a class="sourceLine" id="cb10-3" title="3">  <span class="cf">if</span> (size &gt; <span class="kw">sizeof</span>(*attr)) {</a>
+<a class="sourceLine" id="cb10-4" title="4">    ...</a>
+<a class="sourceLine" id="cb10-5" title="5">    <span class="cf">for</span> (; addr &lt; end; addr += <span class="kw">sizeof</span>(<span class="dt">unsigned</span> <span class="dt">long</span>)) {</a>
+<a class="sourceLine" id="cb10-6" title="6">      ret = get_user(val, addr);</a>
+<a class="sourceLine" id="cb10-7" title="7">      <span class="cf">if</span> (ret)</a>
+<a class="sourceLine" id="cb10-8" title="8">        <span class="cf">return</span> ret;</a>
+<a class="sourceLine" id="cb10-9" title="9">      <span class="cf">if</span> (val)</a>
+<a class="sourceLine" id="cb10-10" title="10">        <span class="cf">goto</span> err_size;</a>
+<a class="sourceLine" id="cb10-11" title="11">    }</a>
+<a class="sourceLine" id="cb10-12" title="12">  }</a>
+<a class="sourceLine" id="cb10-13" title="13">  ret = copy_from_user(attr, uattr, size); <span class="co">// Q. size?</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2009-3234-buffer-overflow-1"><div>
+<h1>CVE-2009-3234: Buffer Overflow!</h1>
+<div class="sourceCode" id="cb11"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb11-1" title="1">  <span class="co">/* If we're handed a bigger struct than we know of,</span></a>
+<a class="sourceLine" id="cb11-2" title="2"><span class="co">   * ensure all the unknown bits are 0.  */</span></a>
+<a class="sourceLine" id="cb11-3" title="3">  <span class="cf">if</span> (size &gt; <span class="kw">sizeof</span>(*attr)) {</a>
+<a class="sourceLine" id="cb11-4" title="4">    ...</a>
+<a class="sourceLine" id="cb11-5" title="5">    <span class="cf">for</span> (; addr &lt; end; addr += <span class="kw">sizeof</span>(<span class="dt">unsigned</span> <span class="dt">long</span>)) {</a>
+<a class="sourceLine" id="cb11-6" title="6">      ret = get_user(val, addr);</a>
+<a class="sourceLine" id="cb11-7" title="7">      <span class="cf">if</span> (ret)</a>
+<a class="sourceLine" id="cb11-8" title="8">        <span class="cf">return</span> ret;</a>
+<a class="sourceLine" id="cb11-9" title="9">      <span class="cf">if</span> (val)</a>
+<a class="sourceLine" id="cb11-10" title="10">        <span class="cf">goto</span> err_size;</a>
+<a class="sourceLine" id="cb11-11" title="11">    }</a>
+<a class="sourceLine" id="cb11-12" title="12">+   size = <span class="kw">sizeof</span>(*attr);</a>
+<a class="sourceLine" id="cb11-13" title="13">  }</a>
+<a class="sourceLine" id="cb11-14" title="14">  ret = copy_from_user(attr, uattr, size); <span class="co">// Q. size?</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2016-4482-linux-usb"><div>
+<h1>CVE-2016-4482: Linux USB</h1>
+<div class="sourceCode" id="cb12"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb12-1" title="1"><span class="dt">static</span> <span class="dt">int</span> proc_connectinfo(<span class="kw">struct</span> usb_dev_state *ps, </a>
+<a class="sourceLine" id="cb12-2" title="2">                            <span class="dt">void</span> __user *arg) {</a>
+<a class="sourceLine" id="cb12-3" title="3">  <span class="kw">struct</span> usbdevfs_connectinfo ci = {</a>
+<a class="sourceLine" id="cb12-4" title="4">    .devnum = ps-&gt;dev-&gt;devnum,</a>
+<a class="sourceLine" id="cb12-5" title="5">    .slow = ps-&gt;dev-&gt;speed == USB_SPEED_LOW</a>
+<a class="sourceLine" id="cb12-6" title="6">  };</a>
+<a class="sourceLine" id="cb12-7" title="7"></a>
+<a class="sourceLine" id="cb12-8" title="8">  <span class="cf">if</span> (copy_to_user(arg, &amp;ci, <span class="kw">sizeof</span>(ci)))</a>
+<a class="sourceLine" id="cb12-9" title="9">    <span class="cf">return</span> -EFAULT;</a>
+<a class="sourceLine" id="cb12-10" title="10">  <span class="cf">return</span> <span class="dv">0</span>;</a>
+<a class="sourceLine" id="cb12-11" title="11">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="padding-issues-in-struct"><div>
+<h1>Padding Issues in Struct</h1>
+<div class="sourceCode" id="cb13"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb13-1" title="1"><span class="kw">struct</span> usbdevfs_connectinfo {</a>
+<a class="sourceLine" id="cb13-2" title="2">  <span class="dt">unsigned</span> <span class="dt">int</span> devnum;  <span class="co">// 4 bytes</span></a>
+<a class="sourceLine" id="cb13-3" title="3">  <span class="dt">unsigned</span> <span class="dt">char</span> slow;   <span class="co">// 1 bytes</span></a>
+<a class="sourceLine" id="cb13-4" title="4">};</a>
+<a class="sourceLine" id="cb13-5" title="5"></a>
+<a class="sourceLine" id="cb13-6" title="6"><span class="kw">sizeof</span>(<span class="kw">struct</span> usbdevfs_connectinfo) == <span class="dv">8</span></a>
+<a class="sourceLine" id="cb13-7" title="7"></a>
+<a class="sourceLine" id="cb13-8" title="8">|&lt;---------- 8B ----------&gt;|</a>
+<a class="sourceLine" id="cb13-9" title="9">[devnum      ][slw][padding]</a>
+<a class="sourceLine" id="cb13-10" title="10">|&lt;--  4B  --&gt;|&lt;1B&gt;|&lt;--3B--&gt;|</a></code></pre></div>
+<p>Ref. <a href="https://taesoo.kim/pubs/2016/lu:unisan.pdf">Proactive Kernel Memory Initialization to Eliminate Data Leakages</a></p>
+</div></section>
+<section class="slide level1" id="struct-padding-no-proper-way-to-initialize"><div>
+<h1>Struct Padding: No Proper Way to Initialize</h1>
+<blockquote>
+<p>§6.2.6.1/6 (C11, ISO/IEC 9899:201x)<br/>
+When a value is stored in an object of structure (…), the bytes of the object representation that correspond to any padding values.</p>
+</blockquote>
+<div class="sourceCode" id="cb14"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb14-1" title="1">  <span class="kw">struct</span> usbdevfs_connectinfo ci = {</a>
+<a class="sourceLine" id="cb14-2" title="2">    .devnum = ps-&gt;dev-&gt;devnum,</a>
+<a class="sourceLine" id="cb14-3" title="3">    .slow = ps-&gt;dev-&gt;speed == USB_SPEED_LOW</a>
+<a class="sourceLine" id="cb14-4" title="4">  };</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2016-4482-patch"><div>
+<h1>CVE-2016-4482: Patch</h1>
+<div class="sourceCode" id="cb15"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb15-1" title="1"><span class="dt">static</span> <span class="dt">int</span> proc_connectinfo(<span class="kw">struct</span> usb_dev_state *ps, </a>
+<a class="sourceLine" id="cb15-2" title="2">                            <span class="dt">void</span> __user *arg) {</a>
+<a class="sourceLine" id="cb15-3" title="3">+   <span class="kw">struct</span> usbdevfs_connectinfo ci;</a>
+<a class="sourceLine" id="cb15-4" title="4">+</a>
+<a class="sourceLine" id="cb15-5" title="5">+   memset(&amp;ci, <span class="dv">0</span>, <span class="kw">sizeof</span>(ci));</a>
+<a class="sourceLine" id="cb15-6" title="6">+   ci.devnum = ps-&gt;dev-&gt;devnum;</a>
+<a class="sourceLine" id="cb15-7" title="7">+   ci.slow = ps-&gt;dev-&gt;speed == USB_SPEED_LOW;</a>
+<a class="sourceLine" id="cb15-8" title="8">    ...</a>
+<a class="sourceLine" id="cb15-9" title="9">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="exercise-real-world-examples"><div>
+<h1>Exercise: Real-world Examples</h1>
+<ul>
+<li>Ex1. Android Stagefright (CVE-2015-1538, CVE-2015-3824)</li>
+<li>Ex2. Linux Keyring (CVE-2016-0728)</li>
+<li>Ex3. Linux Perf (CVE-2009-3234/+)</li>
+<li>Ex4. Linux USB (CVE-2016-4482)</li>
+</ul>
+</div></section>
+<section class="slide level1" id="cve-2015-1538-android-stagefright"><div>
+<h1>CVE-2015-1538: Android (Stagefright)</h1>
+<div class="sourceCode" id="cb16"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb16-1" title="1"><span class="co">// @edd4a76eb4747bd19ed122df46fa46b452c12a0d</span></a>
+<a class="sourceLine" id="cb16-2" title="2"><span class="co">// CVE-2015-1538</span></a>
+<a class="sourceLine" id="cb16-3" title="3">     mTimeToSampleCount = U32_AT(&amp;header[<span class="dv">4</span>]);</a>
+<a class="sourceLine" id="cb16-4" title="4">+    <span class="dt">uint64_t</span> allocSize = mTimeToSampleCount * <span class="dv">2</span> * <span class="kw">sizeof</span>(<span class="dt">uint32_t</span>);</a>
+<a class="sourceLine" id="cb16-5" title="5">+    <span class="cf">if</span> (allocSize &gt; SIZE_MAX) {</a>
+<a class="sourceLine" id="cb16-6" title="6">+      <span class="cf">return</span> ERROR_OUT_OF_RANGE;</a>
+<a class="sourceLine" id="cb16-7" title="7">+    }</a>
+<a class="sourceLine" id="cb16-8" title="8">     mTimeToSample = new <span class="dt">uint32_t</span>[mTimeToSampleCount * <span class="dv">2</span>];</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2015-3824-android-stagefright"><div>
+<h1>CVE-2015-3824: Android (Stagefright)</h1>
+<div class="sourceCode" id="cb17"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb17-1" title="1"><span class="co">// @463a6f807e187828442949d1924e143cf07778c6</span></a>
+<a class="sourceLine" id="cb17-2" title="2"><span class="co">// CVE-2015-3824</span></a>
+<a class="sourceLine" id="cb17-3" title="3">-    <span class="dt">uint8_t</span> *buffer = new (std::nothrow) <span class="dt">uint8_t</span>[size + chunk_size];</a>
+<a class="sourceLine" id="cb17-4" title="4">+    <span class="cf">if</span> (SIZE_MAX - chunk_size &lt;= size) {</a>
+<a class="sourceLine" id="cb17-5" title="5">+      <span class="cf">return</span> ERROR_MALFORMED;</a>
+<a class="sourceLine" id="cb17-6" title="6">+    }</a>
+<a class="sourceLine" id="cb17-7" title="7">+</a>
+<a class="sourceLine" id="cb17-8" title="8">+    <span class="dt">uint8_t</span> *buffer = new <span class="dt">uint8_t</span>[size + chunk_size];</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2016-0728-linux-keyring"><div>
+<h1>CVE-2016-0728: Linux Keyring</h1>
+<div class="sourceCode" id="cb18"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb18-1" title="1"><span class="dt">long</span> join_session_keyring(<span class="dt">const</span> <span class="dt">char</span> *name) {</a>
+<a class="sourceLine" id="cb18-2" title="2">  <span class="co">// refcnt is incremented on "success"!</span></a>
+<a class="sourceLine" id="cb18-3" title="3">  keyring = find_keyring_by_name(name, false); </a>
+<a class="sourceLine" id="cb18-4" title="4">  <span class="cf">if</span> (PTR_ERR(keyring) == -ENOKEY) { ... } </a>
+<a class="sourceLine" id="cb18-5" title="5">  <span class="cf">else</span> <span class="cf">if</span> (IS_ERR(keyring)) { ... }</a>
+<a class="sourceLine" id="cb18-6" title="6">  } <span class="cf">else</span> <span class="cf">if</span> (keyring == new-&gt;session_keyring) {</a>
+<a class="sourceLine" id="cb18-7" title="7">    ret = <span class="dv">0</span>;</a>
+<a class="sourceLine" id="cb18-8" title="8">    <span class="cf">goto</span> error2;</a>
+<a class="sourceLine" id="cb18-9" title="9">  }</a>
+<a class="sourceLine" id="cb18-10" title="10"> error2:</a>
+<a class="sourceLine" id="cb18-11" title="11">  mutex_unlock(&amp;key_session_mutex);</a>
+<a class="sourceLine" id="cb18-12" title="12"> error:</a>
+<a class="sourceLine" id="cb18-13" title="13">  abort_creds(new);</a>
+<a class="sourceLine" id="cb18-14" title="14">  <span class="cf">return</span> ret;</a>
+<a class="sourceLine" id="cb18-15" title="15">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="references"><div>
+<h1>References</h1>
+<ul>
+<li><a href="https://www.blackhat.com/docs/us-15/materials/us-15-Drake-Stagefright-Scary-Code-In-The-Heart-Of-Android.pdf">Stagefright Bugs</a></li>
+<li>Deadline: <a href="https://taesoo.kim/pubs/2018/xu:deadline.pdf">paper</a>/<a href="https://taesoo.kim/pubs/2018/xu:deadline-slides.pdf">slides</a></li>
+<li>Unisan: <a href="https://taesoo.kim/pubs/2016/lu:unisan.pdf">paper</a>/<a href="https://taesoo.kim/pubs/2016/lu:unisan-slides.pdf">slides</a></li>
+<li><a href="http://phrack.org/issues/60/10.html">Basic Integer Overflows</a></li>
+</ul>
+</div></section>
+<div class="progress"><div></div></div>
+<script src="../shower/js/shower.js"></script>
+</body>
+</html>
