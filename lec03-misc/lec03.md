@@ -1,4 +1,4 @@
-@title(Lec03: Integer overflow, race conditions, and uninitialized reads, Taesoo Kim)
+@title(Lec03: Integer overflow, Taesoo Kim)
 
 <style>
  #cover h2 { font-size: 50px !important; margin-bottom: 1.5em !important; }
@@ -200,39 +200,85 @@ c1 = c1 * c2 / c3;
 
 # CS101: Int. Ovfl. and Undefined Behavior
 
-- (in 64-bit) what does the expression, 1 > 0, evaluate to?
-    - ? (a) 0, (b) 1, (c) NaN, (d) -1
-;  > b
-- (unsigned short)1 > -1?
-    - ? (a) 1, (b) 0, (c) -1, (d) undefined
-;  > a
-- -1U > 0?
-    - ? (a) 1, (b) 0, (c) -1, (d) undefined
-;  > a
+~~~{.c}
+1. (in x86_64) what does the expression  1 > 0  evaluate to?
+    (a) 0   (b) 1   (c) NaN   (d) -1    (e) undefined
+~~~
 
-# Q.
-- -1L > 1U? on x86-64 and x86
-    - ? (a) 0 on both platforms, (b) 1 on both platforms, (c) 0 on x86-64, 1 on x86, (d) 1 on x86-64, 0 on x86
-;  > c
-- UINT_MAX + 1?
-    - ? (a) 0, (b) 1, (c) INT_MAX, (d) UINT_MAX, (e) undefined
-;  > a
-- (in 32-bit) what's abs(-2147483648)?
-    - ? (a) == 0, (b) < 0, (c) > 0, (d) == NaN
-;  > b
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+2. (unsigned short)1 > -1?
+    (a) 1   (b) 0   (c) -1    (d) undefined
+~~~
 
-# Discussion: intq
-- -1 << 2?
-    - ? (a) 0, (b) 4, (c) INT_MAX, (d) INT_MIN, (e) undefined
-;  > e
-- INT_MAX + 1?
-    - ? (a) 0, (b) 1, (c) INT_MAX, (d) UINT_MAX, (e) undefined
-;  > e
-- -INT_MIN?
-    - ? (a) 0, (b) 1, (c) INT_MAX, (d) UINT_MAX, (e) INT_MIN, (f) undefined
-;  > f
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+3. -1U > 0?
+    (a) 1   (b) 0   (c) -1    (d) undefined
+~~~
 
-# Basic Idea: Integer-related Vulnerabilities
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+4. UINT_MAX + 1?
+    (a) 0   (b) 1   (c) INT_MAX   (d) UINT_MAX  (e) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+5. abs(-2147483648), abs(INT_MIN)?
+    (a) 0  (b) < 0  (c) > 0  (d) NaN
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+6. 1U << 0?
+    (a) 1   (b) 4  (c) UINT_MAX  (d) 0  (e) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+7. 1U << 32?
+    (a) 1   (b) 4  (c) UINT_MAX  (d) INT_MIN  (e) 0  (f) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+8. -1L << 2?
+    (a) 0   (b) 4  (c) INT_MAX  (d) INT_MIN   (e) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+9. INT_MAX + 1?
+    (a) 0   (b) 1  (c) INT_MAX  (d) UINT_MAX  (e) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+10. UINT_MAX + 1?
+    (a) 0   (b) 1  (c) INT_MAX  (d) UINT_MAX  (e) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+11. -INT_MIN?
+    (a) 0   (b) 1  (c) INT_MAX  (d) UINT_MAX  (e) INT_MIN
+    (f) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+12. -1L > 1U? on x86_64 and x86
+    (a) (0, 0)  (b) (1, 1)  (c) (0, 1)  (d) (1, 0)  
+    (e) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+BONUS. is it possible that a / b < 0 when a < 0 and b < 0?
+~~~
+
+# Integer-related Vulnerabilities
 1. Precision (or widthness) overflows
 2. Arithmetic overflows
 3. Signedness bugs
@@ -312,7 +358,7 @@ static unsigned long randomize_stack_top(unsigned long stack_top) {
 # 3. Signedness Bugs: CVE-2017-7308
 
 - Casting the arithmetic result of unsigned ints to sign for comparison
-- Result in *remote* code execution in Linux
+- Result in *remote* code execution in Linux (network stack)
 
 ~~~~{.c .numberLines}
 // @net/packet/af_packet.c
@@ -474,7 +520,6 @@ check_mul_overflow_size_t(size_t left, size_t right,
 }
 ~~~~
 
-; Defense N
 # New Proposals: __builtin_*_overflow()
 
 - Ref. <https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html>
@@ -503,160 +548,36 @@ void * calloc (size_t x, size_t y) {
 }
 ~~~~
 
-# XXX. Integer Overflow Real Life Impacts
+# Integer Overflow Beyond Security
 
 - 1996: Ariane 5 rocket crashed
 - 2015: FAA requested to reset Boeing 787 every 248 days
 - 2016: a Casino machine printed a prize ticket of $42,949,672!
 
-# Undefined Behaviors and Optimization
+# Not Abusing Int-related BU in Optimizer
 
-- ref. https://kristerw.blogspot.com/2016/02/how-undefined-signed-overflow-enables.html
-- ref. https://nullprogram.com/blog/2018/07/20/
-- -fwrapv
-- -fno-strict-aliasing
+- Option: -fwrapv (gcc/clang)
 
-# Double Fetching Vulnerabilities
-- A special form of race conditions: user vs. kernel spaces
-- Leading to information leaks, buffer overflows, etc.
+~~~{.c .numberLines}
+  // $ cd lec03-misc/intovfl
+  // $ make check-fwrapv
 
- @img(w95%, img/doublefetch.png)
+  int base;
+  scanf("%d", &base);
 
-# Example: perf_copy_attr() Explained
- @img(w90%, img/doublefetch1.png)
+  // Q. base = INT_MAX?
+  if (base < base + 1)
+    printf("base < base + 1 is true!\n");
+~~~
 
-# Example: perf_copy_attr() Explained
- @img(w90%, img/doublefetch2.png)
-
-# Example: perf_copy_attr() Explained
- @img(w90%, img/doublefetch3.png)
-
-# BUG: Racing in Userspace
- @img(w90%, img/doublefetch5.png)
-
-# BUG: "Double" Fetching from Kernel
- @img(w90%, img/doublefetch6.png)
-
-# BUG: Trigger Incorrect Memory Copy
- @img(w90%, img/doublefetch7.png)
-
-# Fixing Double Fetches
-- Partialy reading after the size attribute
-- Ensuring the atomicity of previous checked size
-
-~~~~{.c .numberLines}
-  // @f12f42acdbb577a12eecfcebbbec41c81505c4dc
-  ret = get_user(size, &uattr->size);
-  ret = copy_from_user(attr, uattr, size);
-  ...
-
-  // overwrite with the sanitiy-checked size
-+ attr->size = size; 
-~~~~
-
-# CVE-2009-3234: Buffer Overflow!
-
-~~~~{.c .numberLines}
-  /* If we're handed a bigger struct than we know of,
-   * ensure all the unknown bits are 0.	 */
-  if (size > sizeof(*attr)) {
-    ...
-    for (; addr < end; addr += sizeof(unsigned long)) {
-      ret = get_user(val, addr);
-      if (ret)
-        return ret;
-      if (val)
-        goto err_size;
-    }
-  }
-  ret = copy_from_user(attr, uattr, size); // Q. size?
-~~~~
-
-# CVE-2009-3234: Buffer Overflow!
-
-~~~~{.c .numberLines}
-  /* If we're handed a bigger struct than we know of,
-   * ensure all the unknown bits are 0.	 */
-  if (size > sizeof(*attr)) {
-    ...
-    for (; addr < end; addr += sizeof(unsigned long)) {
-      ret = get_user(val, addr);
-      if (ret)
-        return ret;
-      if (val)
-        goto err_size;
-    }
-+   size = sizeof(*attr);
-  }
-  ret = copy_from_user(attr, uattr, size); // Q. size?
-~~~~
-
-# CVE-2016-4482: Linux USB
-
-~~~~{.c .numberLines}
-static int proc_connectinfo(struct usb_dev_state *ps, 
-                            void __user *arg) {
-  struct usbdevfs_connectinfo ci = {
-    .devnum = ps->dev->devnum,
-    .slow = ps->dev->speed == USB_SPEED_LOW
-  };
-
-  if (copy_to_user(arg, &ci, sizeof(ci)))
-    return -EFAULT;
-  return 0;
-}
-~~~~
-
-# Padding Issues in Struct
-
-~~~~{.c}
-struct usbdevfs_connectinfo {
-  unsigned int devnum;  // 4 bytes
-  unsigned char slow;   // 1 bytes
-};
-
-sizeof(struct usbdevfs_connectinfo) == 8
-
-|<---------- 8B ---------->|
-[devnum      ][slw][padding]
-|<--  4B  -->|<1B>|<--3B-->|
-~~~~
-
-Ref. [Proactive Kernel Memory Initialization to Eliminate Data Leakages](https://taesoo.kim/pubs/2016/lu:unisan.pdf)
-
-# Struct Padding: No Proper Way to Initialize
-
-> §6.2.6.1/6 (C11, ISO/IEC 9899:201x)                   
-> When a value is stored in an object of structure (...),
-> the bytes of the object representation that correspond 
-> to any padding values.
-
-~~~~{.c}
-  struct usbdevfs_connectinfo ci = {
-    .devnum = ps->dev->devnum,
-    .slow = ps->dev->speed == USB_SPEED_LOW
-  };
-~~~~
-
-# CVE-2016-4482: Patch
-
-~~~~{.c .numberLines}
-static int proc_connectinfo(struct usb_dev_state *ps, 
-                            void __user *arg) {
-+	struct usbdevfs_connectinfo ci;
-+
-+	memset(&ci, 0, sizeof(ci));
-+	ci.devnum = ps->dev->devnum;
-+	ci.slow = ps->dev->speed == USB_SPEED_LOW;
-    ...
-}
-~~~~
+; - ref. https://kristerw.blogspot.com/2016/02/how-undefined-signed-overflow-enables.html
+; - ref. https://nullprogram.com/blog/2018/07/20/
+; - -fwrapv
+; - -fno-strict-aliasing
 
 # Exercise: Real-world Examples
 - Ex1. Android Stagefright (CVE-2015-1538, CVE-2015-3824)
 - Ex2. Linux Keyring (CVE-2016-0728)
-- Ex3. Linux Perf (CVE-2009-3234/+)
-- Ex4. Linux USB (CVE-2016-4482)
 
 # CVE-2015-1538: Android (Stagefright)
 
