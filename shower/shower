@@ -248,6 +248,7 @@ if __name__ == '__main__':
               #   TODO. new pandoc fixed the title issue, so better to use pandoc's
               #   instead of doing an ad-hoc manner.
               "--metadata", "title=title",
+              "--mathml",
               "-V", "theme=%s" % args.theme]
     out = subprocess.check_output(pandoc, universal_newlines=True)
 

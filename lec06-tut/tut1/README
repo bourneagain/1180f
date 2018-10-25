@@ -14,7 +14,7 @@ coverage map efficiently in every fuzzing invocation.
   afl-as 2.52b by <lcamtuf@google.com>
   [+] Instrumented 9 locations (64-bit, non-hardened mode, ratio 100%).
                    ----------> 9 basic blocks are instrumented
-                             
+
 Instead of using gcc, you can use afl-gcc, a wrapper script that
 enables instrumentation seamlessly without disturbing the building
 process. In a standard automake-like building environment, you can
@@ -25,12 +25,12 @@ easily inject this compiler option via CC=afl-gcc or CC=afl-clang.
   int main(int argc, char *argv[]) {
     char data[100] = {0};
     size_t size = read(0, data, 100);
-  
+
     if (size > 0 && data[0] == 'H')
       if (size > 1 && data[1] == 'I')
          if (size > 2 && data[2] == '!')
          __builtin_trap();
-    
+
     return 0;
   }
   ~~~~
@@ -75,6 +75,7 @@ start the fuzzing with "AAAA" as input, and expect AFL to convert
   $ mkdir input output
   $ echo AAAA > input/test
   $ afl-fuzz -i input -o output ./a.out
+  (after a few seconds, press C-c to terminate the fuzzer)
   ...
 
                         american fuzzy lop 2.52b (a.out)
@@ -186,9 +187,9 @@ it's not too easy to find one, so let's try to use AFL.
 Let's manually explore this toy program while collecting what we are typing.
 
   $ mkdir input
-  $ tee input/test1 | ./registration 
+  $ tee input/test1 | ./registration
   ...
-  $ tee input/test2 | ./registration 
+  $ tee input/test2 | ./registration
   ...
 
 3) Fuzzing time!
@@ -199,10 +200,15 @@ In fact, the fuzzer fairly quickly finds a few crashing inputs! You
 can easily analyze them by manually injecting the crashing input to
 the program or by running it with gdb.
 
+  $ ls output/crashes
+  ...
+
+Let's pick one of the crashing inputs, and reproduce the crash like this:
+
   $ cat output/crashes/id:000001,sig:06,src:000001,op:flip2,pos:18 | ./registration
   ...
   [*] Unregister course :(
-  - Give me an index to choose                                                                                                                                  
+  - Give me an index to choose
   double free or corruption (fasttop)
   zsh: abort      ./registration
 
@@ -224,6 +230,7 @@ the program or by running it with gdb.
 
 You can enable ASAN simply by setting AFL_USE_ASAN=1:
 
+ $ make clean
  $ AFL_USE_ASAN=1 CC=afl-clang make
 
  $ ./registration < output/crashes/id:000000,sig:06,src:000000...
@@ -301,7 +308,7 @@ of the security problem.
   int strncmp(const char *s1, const char *s2, size_t n) {
     size_t i;
     int diff;
-  
+
     for (i = 0; i < n; i++) {
   *   diff = ((unsigned char *) s1)[i] - ((unsigned char *) s2)[i];
   *   if (diff != 0 || s1[i] == '\0')

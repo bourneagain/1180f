@@ -1,6 +1,6 @@
 CFLAGS := -O0 -g
 SHELL := bash
-ALL := cmp64 cmp32 builtin fwrap-yes fwrap-no
+ALL := cmp64 cmp32 builtin fwrap-yes fwrap-no uintcmp intovfl1 intovfl2
 
 all: $(ALL)
 

@@ -10,18 +10,193 @@
     1. Race condition
     1. Uninitialized reads
 - Understand their security implications
-- Understand the off-the-shelf mitigation
-- Learn them from the real-world examples
+- Understand best security practices
+- Learn them from the real-world examples (Android, Linux, etc)
 
-# Basic Idea: Integer Representation
+# CS101: Integer Representation
+ @img(w55%, img/odometer.jpg)
 
-XXX. (from phrack)
+Ref. <https://en.wikipedia.org/wiki/Integer_overflow>
 
-# Integer Overflow Real Life Impacts
+# CS101: Two's Complement Representation
 
-- 1996: Ariane 5 rocket crashed
-- 2015: FAA requested to reset Boeing 787 every 248 days
-- 2016: a Casino machine printed a prize ticket of $42,949,672!
+ @img(w70%, img/two.png)
+
+~~~~
+e.g., in x86 (32-bit, 4-byte):
+    - 0x00000000 ->  0
+    - 0x7fffffff ->  2147483648 (INT_MAX)
+    - 0x80000000 -> -2147483649 (INT_MIN)
+    - 0xffffffff -> -1
+~~~~
+Ref. <https://en.wikipedia.org/wiki/Two's_complement>
+
+# Arithmetic with Two's Complements
+- One instruction works for both sign/unsigned integers (i.e., add, sub, mul)
+    - e.g., add reg1, reg2 (not distinguishing signedness of reg1/2)
+- Properties
+    - Non-symmetric representation of range, but single 0
+    - MSB represents signedness: 1 means negative, 0 means positive
+
+~~~~
+    0x00000001 + 0x00000002 = 0x00000003 ( 1 + 2 = 3)
+    0xffffffff + 0x00000002 = 0x00000001 (-1 + 2 = 1)
+    0xffffffff + 0xfffffffe = 0xfffffffd (-1 +-2 =-3)
+
+    range(signe integer) = [-2^31-1, 2^31] = [-2147483649, 2147483648]
+    range(unsigned integer) = [0, 2^32-1] = [0, 4294967295]
+~~~~
+
+# Question!
+- Then, how to interpret the arithmetic result?
+
+~~~~{.asm}
+    ; 0xffffffff + 0xfffffffe = 0xfffffffd (-1 +-2 =-3)
+
+    mov eax, 0xffffffff   ; eax = 0xffffffff
+    mov ebx, 0xfffffffd   ; ebx = 0xfffffffe
+    add eax, ebx          ; eax = 0xfffffffd
+    ; eax = 0xfffffffd
+    ; 1) is it -3?
+    ; 2) is it 4294967293 (== 0xfffffffd)?
+~~~~
+
+# Idea: Using Status Flags (E/RFLAGS)
+- CF: overflow of unsigned arithmetic operations
+- OF: overflow of signed arithmetic operations
+
+~~~~
+    0x00000001 + 0x00000002 = 0x00000003 ( 1 + 2 = 3)
+    -> CF: 0   OF: 0    SF: 0
+    
+    0xffffffff + 0x00000002 = 0x00000001 (-1 + 2 = 1)
+    -> CF: 1   OF: 0    SF: 0
+
+    0x80000000 + 0xffffffff = 0x7fffffff (-2147483649 + -1 =  2147483648)
+    -> CF: 1   OF: 1    SF: 0
+
+    0x7fffffff + 0x00000001 = 0x80000000 ( 2147483648 +  1 = -2147483649)
+    -> CF: 0   OF: 1    SF: 1
+~~~~
+
+# C's Integer Representation
+
+~~~~{.c}
+                        x86 (32b)     x86_64 (64b)
+    char                : 1 bytes       1 bytes
+    unsigned char       : 1 bytes       1 bytes
+    short               : 2 bytes       2 bytes
+    unsigned short      : 2 bytes       2 bytes
+    int                 : 4 bytes       4 bytes
+    unsigned int        : 4 bytes       4 bytes
+(*) long                : 4 bytes       8 bytes
+(*) unsigned long       : 4 bytes       8 bytes
+    long long           : 8 bytes       8 bytes
+    unsigned long long  : 8 bytes       8 bytes
+(*) size_t              : 4 bytes       8 bytes
+(*) ssize_t             : 4 bytes       8 bytes
+(*) void*               : 4 bytes       8 bytes
+~~~~
+
+# Thinking of C's Type/Precision Conversion
+
+- Lower -> higher precision
+
+~~~~{.c}
+            char -> int
+     [-128, 127] -> [-128, 127]
+    [0x80, 0x7f] -> [0xffffff80, 0x0000007f]
+                       ------> sign extended (e.g., movsx)
+                        
+   unsigned char -> unsigned int
+        [0, 255] -> [0, 255]
+       [0, 0xff] -> [0, 0x000000ff]
+                          ------> zero extended (e.g., movzx)
+~~~~
+
+# Thinking of C's Type/Precision Conversion
+
+- Higher -> lower precision (what's correct mappings?)
+- Mathematically complex, but architecturally simple (truncation!)
+
+~~~~{.c}
+                      int -> char
+[-2147483649, 2147483648] -> [-128, 127]
+ [0x80000000, 0x7fffffff] -> [0x80, 0x7f]
+
+            unsigned int -> unsigned char
+         [0, 4294967295] -> [0, 255]
+         [0, 0xffffffff] -> [0, 0xff]
+
+        both simply, eax -> al  (by processor)
+~~~~
+
+# Example of Precision Conversion
+
+~~~~{.c}
+$ cd lec03-misc/intovfl
+$ ./intovfl2
+0x7fffffff ->
+  (unsigned int)(unsigned char): 000000ff
+  ; mov eax, 0x7fffffff
+  ; movzx eax, al
+  (unsigned int)(char)         : ffffffff
+  ; mov eax, 0x7fffffff
+  ; movsx eax, al
+~~~~
+
+# Question?
+
+~~~{.c}
+char c1 = 100;
+char c2 = 3;
+char c3 = 4;
+c1 = c1 * c2 / c3;
+     -------
+  1) 300 / 4 = 75
+  2) 300 (0x12c, which is > 8 bytes) -> 0x2c / 4 = 11
+~~~
+
+# Basic Concept: Integer Promotion
+
+- Before any arithmetic operations,
+- All integer types whose size is < sizeof(int):
+    1. Promote to int (if int can represent the whole range)
+    2. Promote to unsigned int (if not)
+
+# Example: char/unsigned char Addition
+- Promote to int (if int can represent the whole range)
+
+~~~~{.c}
+  // by rule 1. -> (1)
+  char sc = SCHAR_MAX;
+  unsigned char uc = UCHAR_MAX;
+  long long sll = sc + uc;
+
+      1) (unsigned long long)((int)sc + (int)uc)?
+      2) (unsigned long long)sc + (unsigned long long)uc?
+~~~~
+
+# Example: int/unsigned int Comparison
+- Promote to unsigned int (if not)
+~~~~{.c}
+  // by rule 2. -> (2)
+  int si = -1;
+  unsigned int ui = 1;
+  printf("%d\n", (int)(si < ui);
+               1) ui promotes to int
+                  = -1 < 1
+                  = 1
+               2) si promotes to unsigned int
+                  = 0xffffffff < 1
+                  = 0
+~~~~
+
+# Remark: Undefined Behaviors
+- Overflow of unsigned integers are well-defined (i.e., wrapping)
+- Overflow of **signed** integers are **undefined**
+    - But well-defined to the processor (i.e., wrapping in x86)
+    - Optimization takes advantages of this, making it hard to understand
 
 # CS101: Int. Ovfl. and Undefined Behavior
 
@@ -56,6 +231,149 @@ XXX. (from phrack)
 - -INT_MIN?
     - ? (a) 0, (b) 1, (c) INT_MAX, (d) UINT_MAX, (e) INT_MIN, (f) undefined
 ;  > f
+
+# Basic Idea: Integer-related Vulnerabilities
+1. Precision (or widthness) overflows
+2. Arithmetic overflows
+3. Signedness bugs
+4. Undefined behaviors (e.g., time bomb)
+
+# 1. Precision Error: CVE-2015-1593
+- Arithmetic operations b/w unsigned int and unsigned long
+- Reducing ASLR entropy by four in Linux (in x86_64)
+
+~~~{.c .numberLines}
+// @fs/binfmt_elf.c
+static unsigned long randomize_stack_top(unsigned long stack_top) {
+  unsigned int random_variable = 0;
+  if ((current->flags & PF_RANDOMIZE) &&
+      !(current->personality & ADDR_NO_RANDOMIZE)) {
+    random_variable = get_random_int() & STACK_RND_MASK;
+*   random_variable <<= PAGE_SHIFT;
+  }
+  return PAGE_ALIGN(stack_top) - random_variable;
+}
+~~~~
+
+# CVE-2015-1593: Patch
+- unsigned int -> unsigned long (match the precision)
+- Be careful when you'd like to multiple architecture
+
+~~~{.c .numberLines}
+// @fs/binfmt_elf.c
+static unsigned long randomize_stack_top(unsigned long stack_top) {
+* unsigned long random_variable = 0;
+  if ((current->flags & PF_RANDOMIZE) &&
+      !(current->personality & ADDR_NO_RANDOMIZE)) {
+    random_variable = get_random_int() & STACK_RND_MASK;
+*   random_variable <<= PAGE_SHIFT;
+  }
+  return PAGE_ALIGN(stack_top) - random_variable;
+}
+~~~~
+
+# 2. Arithmetic Overflow: CVE-2018-6092
+
+- Arithmetic overflows when adding two unsigned ints
+- Result in *remote* code execution in Chrome (V8/WASM, 32-bit)
+
+~~~~{.c .numberLines}
+// @src/wasm/function-body-decoder-impl.h
+//  count: unsigned int
+//  type_list->size(): size_t
+//  kV8MaxWasmFunctionLocals: size_t
+
+* if ((count + type_list->size()) 
+*       > kV8MaxWasmFunctionLocals) {
+    decoder->error(decoder->pc()-1, "local count too large");
+    return false;
+  }
+~~~~
+
+# CVE-2018-6092: Patch
+
+- Standard pattern/fix
+- Avoid potential arithmetic overflows
+
+~~~~{.c .numberLines}
+// @src/wasm/function-body-decoder-impl.h
+//  count: unsigned int
+//  type_list->size(): size_t
+//  kV8MaxWasmFunctionLocals: size_t
+
++ DCHECK_LE(type_list->size(), kV8MaxWasmFunctionLocals);
++ if (count 
++      > kV8MaxWasmFunctionLocals - type_list->size()) {
+    decoder->error(decoder->pc()-1, "local count too large");
+    return false;
+  }
+~~~~
+
+# 3. Signedness Bugs: CVE-2017-7308
+
+- Casting the arithmetic result of unsigned ints to sign for comparison
+- Result in *remote* code execution in Linux
+
+~~~~{.c .numberLines}
+// @net/packet/af_packet.c
+//   req->tp_block_size: unsigned int
+//   BLK_PLUS_PRIV(..) : unsigned int
+
+if (po->tp_version >= TPACKET_V3 &&
+*   (int)(req->tp_block_size -
+*         BLK_PLUS_PRIV(req_u->req3.tp_sizeof_priv)) <= 0)
+    goto out;
+~~~~
+
+# CVE-2017-7308: Patch
+
+- Direct comparison of unsigned ints!
+- Fix a potential overflow inside the macro as well
+
+~~~~{.c .numberLines}
+// @net/packet/af_packet.c
+//   req->tp_block_size: unsigned int
+//   BLK_PLUS_PRIV(..) : unsigned long long
+
+if (po->tp_version >= TPACKET_V3 &&
+*   req->tp_block_size 
+*     <= BLK_PLUS_PRIV((u64)req_u->req3.tp_sizeof_priv))
+    goto out;
+~~~~
+
+# Testing Signedness Bugs
+
+~~~~{.c}
+  $ cd lec03-misc/intovfl
+  $ make
+  $ ./uintcmp
+  0 < 1 = 1?
+    (int)(0 - 1) == -1 <= 0? -> 1
+  1 < 0 = 0?
+    (int)(1 - 0) ==  1 <= 0? -> 0
+  4294967196 < 200 = 1?
+    (int)(4294967196 - 200) == -300 <= 0? -> 1
+  unsigned int a = ?
+  unsigned int b = ?
+~~~~
+
+# 4. Undefined Behaviors: NaCL/x86 
+
+- Shifting more than the available #bits
+- Result in the entire sandbox sequence no-op!
+
+~~~~{.c}
+// @NaClSandboxAddr()
+                                 +--> 32 bytes in x32
+                                 |
+                                 +------------------
+return addr & ~(uintptr_t)((1 << nap->align_boundary) - 1);
+                           +-------------------------
+                           |
+                           +--> (1 << 32) == 1 in gcc!
+~~~~
+
+Ref. <https://bugs.chromium.org/p/nativeclient/issues/detail?id=245>
 
 # Secure Way to Add Two Ints
 
@@ -184,6 +502,12 @@ void * calloc (size_t x, size_t y) {
   return ret;
 }
 ~~~~
+
+# XXX. Integer Overflow Real Life Impacts
+
+- 1996: Ariane 5 rocket crashed
+- 2015: FAA requested to reset Boeing 787 every 248 days
+- 2016: a Casino machine printed a prize ticket of $42,949,672!
 
 # Undefined Behaviors and Optimization
 
@@ -385,3 +709,7 @@ long join_session_keyring(const char *name) {
 - Deadline: [paper](https://taesoo.kim/pubs/2018/xu:deadline.pdf)/[slides](https://taesoo.kim/pubs/2018/xu:deadline-slides.pdf)
 - Unisan: [paper](https://taesoo.kim/pubs/2016/lu:unisan.pdf)/[slides](https://taesoo.kim/pubs/2016/lu:unisan-slides.pdf)
 - [Basic Integer Overflows](http://phrack.org/issues/60/10.html)
+- [Integer Rules](https://wiki.sei.cmu.edu/confluence/display/c/INT02-C.+Understand+integer+conversion+rules)
+- [CVE-2017-7308](https://googleprojectzero.blogspot.com/2017/05/exploiting-linux-kernel-via-packet.html)
+- [CVE-2018-6092](https://bugs.chromium.org/p/chromium/issues/detail?id=819869)
+- [CVE-2015-1593](http://hmarco.org/bugs/linux-ASLR-integer-overflow.html)

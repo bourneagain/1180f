@@ -8,9 +8,6 @@ RUN apt-get install -y git sudo vim
 RUN apt-get install -y clang libfuzzer-6.0-dev
 RUN apt-get install -y afl
 
-WORKDIR /root
-COPY . .
+RUN git clone git://tc.gtisc.gatech.edu/nutanix-training training
 
-# trim for release
-RUN rm -rf .git
-RUN rm NOTE.plan
+WORKDIR /training
