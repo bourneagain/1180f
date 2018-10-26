@@ -124,64 +124,89 @@ a.sourceLine::before { text-decoration: none; }
  </style>
 </section>
 
-<section class="slide level1" id="outline"><div>
-<h1>Outline</h1>
-<ul>
-<li>Off-the-shelf defenses:
-<ol type="1">
-<li>ASLR: Address Space Layout Randomization</li>
-<li>RELRO: Relocation Readonly</li>
-</ol></li>
-</ul>
-</div></section>
 <section class="slide level1" id="goals-and-lessons"><div>
 <h1>Goals and Lessons</h1>
 <ul>
-<li>Learn about the format string bugs</li>
+<li>Learn about the heap-related vulnerabilities
+<ul>
+<li>Buffer overflow/underflow, out-of-bound read</li>
+<li>Use-after-free, including double frees</li>
+</ul></li>
 <li>Understand their security implications</li>
-<li>Understand the off-the-shelf mitigation</li>
-<li>Learn them from the real-world examples (i.e., sudo/Linux)</li>
+<li>Understand the off-the-shelf mitigation (lec05)</li>
+<li>Learn them from the real-world examples</li>
+</ul>
+</div></section>
+<section class="slide level1" id="classifying-heap-vulnerabilities"><div>
+<h1>Classifying Heap Vulnerabilities</h1>
+<ul>
+<li>Buffer overflow/underflow, out-of-bound read
+<ul>
+<li>Much prevalent (i.e., quality, complexity)</li>
+<li>Much critical (i.e., larger attack surface)</li>
+</ul></li>
+<li>Heap-specific issues
+<ul>
+<li>Use-after-free (e.g., dangled pointers)</li>
+<li>Incorrect uses (e.g., double frees)</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="interface"><div>
+<h1>Interface</h1>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"></code></pre></div>
+</div></section>
+<section class="slide level1" id="understanding-modern-heap-allocators"><div>
+<h1>Understanding Modern Heap Allocators</h1>
+<p style="text-align:center;margin:0"><img src="img/heap.svg" style="width:150%"/></p>
+</div></section>
+<section class="slide level1" id="exercises-real-world-examples"><div>
+<h1>Exercises: Real-world Examples</h1>
+<ul>
+<li>CVE-2014-0160: OpenSSL</li>
+<li>CVE-2018-11360: Wireshark</li>
+<li>CVE-2016-0728: Linux vmacache (refcnt)</li>
 </ul>
 </div></section>
 <section class="slide level1" id="example-of-use-after-free"><div>
 <h1>Example of Use-after-free</h1>
 <p style="text-align:center;margin:0"><img src="img/ex0.svg" style="width:40%"/></p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb1-1" title="1"><span class="kw">class</span> Div: Element;</a>
-<a class="sourceLine" id="cb1-2" title="2"><span class="kw">class</span> Body: Element;</a>
-<a class="sourceLine" id="cb1-3" title="3"><span class="kw">class</span> Document { Element* child; };</a></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb2-1" title="1"><span class="kw">class</span> Div: Element;</a>
+<a class="sourceLine" id="cb2-2" title="2"><span class="kw">class</span> Body: Element;</a>
+<a class="sourceLine" id="cb2-3" title="3"><span class="kw">class</span> Document { Element* child; };</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="example-of-use-after-free-1"><div>
 <h1>Example of Use-after-free</h1>
 <p style="text-align:center;margin:0"><img src="img/ex1.svg" style="width:60%"/></p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb2-1" title="1"><span class="kw">class</span> Div: Element;</a>
-<a class="sourceLine" id="cb2-2" title="2"><span class="kw">class</span> Body: Element;</a>
-<a class="sourceLine" id="cb2-3" title="3"><span class="kw">class</span> Document { Element* child; };</a>
-<a class="sourceLine" id="cb2-4" title="4"></a>
-<a class="sourceLine" id="cb2-5" title="5"><span class="co">// (a) memory allocations</span></a>
-<a class="sourceLine" id="cb2-6" title="6">Document *doc = <span class="kw">new</span> Document();</a>
-<a class="sourceLine" id="cb2-7" title="7">Body *body = <span class="kw">new</span> Body();</a>
-<a class="sourceLine" id="cb2-8" title="8">Div *div = <span class="kw">new</span> Div();</a></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb3-1" title="1"><span class="kw">class</span> Div: Element;</a>
+<a class="sourceLine" id="cb3-2" title="2"><span class="kw">class</span> Body: Element;</a>
+<a class="sourceLine" id="cb3-3" title="3"><span class="kw">class</span> Document { Element* child; };</a>
+<a class="sourceLine" id="cb3-4" title="4"></a>
+<a class="sourceLine" id="cb3-5" title="5"><span class="co">// (a) memory allocations</span></a>
+<a class="sourceLine" id="cb3-6" title="6">Document *doc = <span class="kw">new</span> Document();</a>
+<a class="sourceLine" id="cb3-7" title="7">Body *body = <span class="kw">new</span> Body();</a>
+<a class="sourceLine" id="cb3-8" title="8">Div *div = <span class="kw">new</span> Div();</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="example-of-use-after-free-2"><div>
 <h1>Example of Use-after-free</h1>
 <p style="text-align:center;margin:0"><img src="img/ex2.svg" style="width:60%"/></p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb3-1" title="1"><span class="co">// (b) using memory: propagating pointers</span></a>
-<a class="sourceLine" id="cb3-2" title="2">doc-&gt;child = body;</a>
-<a class="sourceLine" id="cb3-3" title="3">body-&gt;child = div;</a>
-<a class="sourceLine" id="cb3-4" title="4"></a>
-<a class="sourceLine" id="cb3-5" title="5"><span class="co">// (c) memory free: doc-&gt;child is now dangled</span></a>
-<a class="sourceLine" id="cb3-6" title="6"><span class="kw">delete</span> body;</a>
-<a class="sourceLine" id="cb3-7" title="7"></a>
-<a class="sourceLine" id="cb3-8" title="8"><span class="co">// (d) use-after-free: dereference the dangled pointer</span></a>
-<a class="sourceLine" id="cb3-9" title="9"><span class="cf">if</span> (doc-&gt;child)</a>
-<a class="sourceLine" id="cb3-10" title="10">    doc-&gt;child-&gt;getAlign();</a></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb4-1" title="1"><span class="co">// (b) using memory: propagating pointers</span></a>
+<a class="sourceLine" id="cb4-2" title="2">doc-&gt;child = body;</a>
+<a class="sourceLine" id="cb4-3" title="3">body-&gt;child = div;</a>
+<a class="sourceLine" id="cb4-4" title="4"></a>
+<a class="sourceLine" id="cb4-5" title="5"><span class="co">// (c) memory free: doc-&gt;child is now dangled</span></a>
+<a class="sourceLine" id="cb4-6" title="6"><span class="kw">delete</span> body;</a>
+<a class="sourceLine" id="cb4-7" title="7"></a>
+<a class="sourceLine" id="cb4-8" title="8"><span class="co">// (d) use-after-free: dereference the dangled pointer</span></a>
+<a class="sourceLine" id="cb4-9" title="9"><span class="cf">if</span> (doc-&gt;child)</a>
+<a class="sourceLine" id="cb4-10" title="10">    doc-&gt;child-&gt;getAlign();</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="exercise-real-world-examples"><div>
 <h1>Exercise: Real-world Examples</h1>
 <ul>
 <li>Ex1. OpenSSL (CVE-2014-0160)</li>
 <li>Ex2. Wireshark (CVE-2018-11360)</li>
-<li>Ex3.</li>
+<li>Ex3. Linux vmcache (CVE-2018-17182)</li>
 </ul>
 </div></section>
 <section class="slide level1" id="cve-2014-0160-openssl-heartbleed"><div>
@@ -206,61 +231,55 @@ a.sourceLine::before { text-decoration: none; }
 </div></section>
 <section class="slide level1" id="cve-2014-0160-openssl-heartbleed-2"><div>
 <h1>CVE-2014-0160: OpenSSL, Heartbleed</h1>
-<div class="sourceCode" id="cb5"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb5-1" title="1">  <span class="co">/* Read type and payload length first */</span></a>
-<a class="sourceLine" id="cb5-2" title="2">  hbtype = *p++;</a>
-<a class="sourceLine" id="cb5-3" title="3">  n2s(p, payload);</a>
-<a class="sourceLine" id="cb5-4" title="4">  pl = p;</a>
-<a class="sourceLine" id="cb5-5" title="5"></a>
-<a class="sourceLine" id="cb5-6" title="6">  <span class="cf">if</span> (hbtype == TLS1_HB_REQUEST) {</a>
-<a class="sourceLine" id="cb5-7" title="7">    bp = OPENSSL_malloc(<span class="dv">1</span> + <span class="dv">2</span> + payload + padding);</a>
-<a class="sourceLine" id="cb5-8" title="8"></a>
-<a class="sourceLine" id="cb5-9" title="9">    <span class="co">/* Enter response type, length and copy payload */</span></a>
-<a class="sourceLine" id="cb5-10" title="10">    *bp++ = TLS1_HB_RESPONSE;</a>
-<a class="sourceLine" id="cb5-11" title="11">    s2n(payload, bp);</a>
-<a class="sourceLine" id="cb5-12" title="12">    memcpy(bp, pl, payload);</a></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb6-1" title="1">  <span class="co">/* Read type and payload length first */</span></a>
+<a class="sourceLine" id="cb6-2" title="2">  hbtype = *p++;</a>
+<a class="sourceLine" id="cb6-3" title="3">  n2s(p, payload);</a>
+<a class="sourceLine" id="cb6-4" title="4">  pl = p;</a>
+<a class="sourceLine" id="cb6-5" title="5"></a>
+<a class="sourceLine" id="cb6-6" title="6">  <span class="cf">if</span> (hbtype == TLS1_HB_REQUEST) {</a>
+<a class="sourceLine" id="cb6-7" title="7">    bp = OPENSSL_malloc(<span class="dv">1</span> + <span class="dv">2</span> + payload + padding);</a>
+<a class="sourceLine" id="cb6-8" title="8"></a>
+<a class="sourceLine" id="cb6-9" title="9">    <span class="co">/* Enter response type, length and copy payload */</span></a>
+<a class="sourceLine" id="cb6-10" title="10">    *bp++ = TLS1_HB_RESPONSE;</a>
+<a class="sourceLine" id="cb6-11" title="11">    s2n(payload, bp);</a>
+<a class="sourceLine" id="cb6-12" title="12">    memcpy(bp, pl, payload);</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="cve-2014-0160-openssl-heartbleed-3"><div>
 <h1>CVE-2014-0160: OpenSSL, Heartbleed</h1>
-<div class="sourceCode" id="cb6"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb6-1" title="1">   <span class="dt">unsigned</span> <span class="dt">int</span> payload;</a>
-<a class="sourceLine" id="cb6-2" title="2">   ...</a>
-<a class="sourceLine" id="cb6-3" title="3">+  <span class="co">/* Read type and payload length first */</span></a>
-<a class="sourceLine" id="cb6-4" title="4">+  <span class="cf">if</span> (<span class="dv">1</span> + <span class="dv">2</span> + <span class="dv">16</span> &gt; s-&gt;s3-&gt;rrec.length)</a>
-<a class="sourceLine" id="cb6-5" title="5">+    <span class="cf">return</span> <span class="dv">0</span>; <span class="co">/* silently discard */</span></a>
-<a class="sourceLine" id="cb6-6" title="6">+</a>
-<a class="sourceLine" id="cb6-7" title="7">+  hbtype = *p++;</a>
-<a class="sourceLine" id="cb6-8" title="8">+  n2s(p, payload);</a>
-<a class="sourceLine" id="cb6-9" title="9">+  <span class="cf">if</span> (<span class="dv">1</span> + <span class="dv">2</span> + payload + <span class="dv">16</span> &gt; s-&gt;s3-&gt;rrec.length) <span class="co">// </span><span class="al">BUG</span><span class="co">?</span></a>
-<a class="sourceLine" id="cb6-10" title="10">+    <span class="cf">return</span> <span class="dv">0</span>; <span class="co">/* silently discard per RFC 6520 sec. 4 */</span></a>
-<a class="sourceLine" id="cb6-11" title="11">+  pl = p;</a>
-<a class="sourceLine" id="cb6-12" title="12">+</a>
-<a class="sourceLine" id="cb6-13" title="13">   <span class="cf">if</span> (hbtype == TLS1_HB_REQUEST) { ... }</a></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb7-1" title="1">   <span class="dt">unsigned</span> <span class="dt">int</span> payload;</a>
+<a class="sourceLine" id="cb7-2" title="2">   ...</a>
+<a class="sourceLine" id="cb7-3" title="3">+  <span class="co">/* Read type and payload length first */</span></a>
+<a class="sourceLine" id="cb7-4" title="4">+  <span class="cf">if</span> (<span class="dv">1</span> + <span class="dv">2</span> + <span class="dv">16</span> &gt; s-&gt;s3-&gt;rrec.length)</a>
+<a class="sourceLine" id="cb7-5" title="5">+    <span class="cf">return</span> <span class="dv">0</span>; <span class="co">/* silently discard */</span></a>
+<a class="sourceLine" id="cb7-6" title="6">+</a>
+<a class="sourceLine" id="cb7-7" title="7">+  hbtype = *p++;</a>
+<a class="sourceLine" id="cb7-8" title="8">+  n2s(p, payload);</a>
+<a class="sourceLine" id="cb7-9" title="9">+  <span class="cf">if</span> (<span class="dv">1</span> + <span class="dv">2</span> + payload + <span class="dv">16</span> &gt; s-&gt;s3-&gt;rrec.length) <span class="co">// </span><span class="al">BUG</span><span class="co">?</span></a>
+<a class="sourceLine" id="cb7-10" title="10">+    <span class="cf">return</span> <span class="dv">0</span>; <span class="co">/* silently discard per RFC 6520 sec. 4 */</span></a>
+<a class="sourceLine" id="cb7-11" title="11">+  pl = p;</a>
+<a class="sourceLine" id="cb7-12" title="12">+</a>
+<a class="sourceLine" id="cb7-13" title="13">   <span class="cf">if</span> (hbtype == TLS1_HB_REQUEST) { ... }</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="cve-2018-11360-wireshark"><div>
 <h1>CVE-2018-11360: Wireshark</h1>
-<div class="sourceCode" id="cb7"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb7-1" title="1"><span class="dt">void</span> IA5_7BIT_decode(<span class="dt">unsigned</span> <span class="dt">char</span> *dest, </a>
-<a class="sourceLine" id="cb7-2" title="2">                     <span class="dt">const</span> <span class="dt">unsigned</span> <span class="dt">char</span> *src, <span class="dt">int</span> len) {</a>
-<a class="sourceLine" id="cb7-3" title="3">  <span class="dt">int</span> i, j;</a>
-<a class="sourceLine" id="cb7-4" title="4">  gunichar buf;</a>
-<a class="sourceLine" id="cb7-5" title="5"></a>
-<a class="sourceLine" id="cb7-6" title="6">  <span class="cf">for</span> (i = <span class="dv">0</span>, j = <span class="dv">0</span>; j &lt; len;  j++) {</a>
-<a class="sourceLine" id="cb7-7" title="7">    buf = char_def_ia5_alphabet_decode(src[j]);</a>
-<a class="sourceLine" id="cb7-8" title="8">    i += g_unichar_to_utf8(buf,&amp;(dest[i]));</a>
-<a class="sourceLine" id="cb7-9" title="9">  }</a>
-<a class="sourceLine" id="cb7-10" title="10">  dest[i]=<span class="dv">0</span>;</a>
-<a class="sourceLine" id="cb7-11" title="11">  <span class="cf">return</span>;</a>
-<a class="sourceLine" id="cb7-12" title="12">}</a></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb8-1" title="1"><span class="dt">void</span> IA5_7BIT_decode(<span class="dt">unsigned</span> <span class="dt">char</span> *dest, </a>
+<a class="sourceLine" id="cb8-2" title="2">                     <span class="dt">const</span> <span class="dt">unsigned</span> <span class="dt">char</span> *src, <span class="dt">int</span> len) {</a>
+<a class="sourceLine" id="cb8-3" title="3">  <span class="dt">int</span> i, j;</a>
+<a class="sourceLine" id="cb8-4" title="4">  gunichar buf;</a>
+<a class="sourceLine" id="cb8-5" title="5"></a>
+<a class="sourceLine" id="cb8-6" title="6">  <span class="cf">for</span> (i = <span class="dv">0</span>, j = <span class="dv">0</span>; j &lt; len;  j++) {</a>
+<a class="sourceLine" id="cb8-7" title="7">    buf = char_def_ia5_alphabet_decode(src[j]);</a>
+<a class="sourceLine" id="cb8-8" title="8">    i += g_unichar_to_utf8(buf,&amp;(dest[i]));</a>
+<a class="sourceLine" id="cb8-9" title="9">  }</a>
+<a class="sourceLine" id="cb8-10" title="10">  dest[i]=<span class="dv">0</span>;</a>
+<a class="sourceLine" id="cb8-11" title="11">  <span class="cf">return</span>;</a>
+<a class="sourceLine" id="cb8-12" title="12">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="references"><div>
 <h1>References</h1>
 <ul>
-<li><a href="https://www.blackhat.com/presentations/bh-europe-09/Fritsch/Blackhat-Europe-2009-Fritsch-Bypassing-aslr-slides.pdf">Bypassing ASLR</a></li>
-<li><a href="http://phrack.org/issues/58/4.html">Advanced return-into-lib(c) exploits</a></li>
-<li><a href="https://crypto.stanford.edu/cs155/papers/formatstring-1.2.pdf">Format string vulnerability</a></li>
-<li><a href="https://link.springer.com/chapter/10.1007/978-3-319-23802-9_23">Blind format string attacks</a></li>
-<li><a href="http://phrack.org/issues/67/9.html">A Eulogy for Format Strings</a></li>
-<li><a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=ffc8b30866879ed9ba62bd0a86fecdbd51cd3d19">CVE-2013-2851</a></li>
-<li><a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8d0c2d10dd72c5292eda7a06231056a4c972e4cc">CVE-2013-1848</a></li>
-<li><a href="http://www.vnsecurity.net/research/2012/02/16/exploiting-sudo-format-string-vunerability.html">CVE-2012-0809</a></li>
+<li><a href="https://googleprojectzero.blogspot.com/2018/09/a-cache-invalidation-bug-in-linux.html">CVE-2018-17182</a></li>
+<li><a href="http://phrack.org/issues/57/8.html">Vudo - An object superstitiously believed to embody magical powers</a></li>
 </ul>
 </div></section>
 <div class="progress"><div></div></div>

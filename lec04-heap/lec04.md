@@ -8,6 +8,35 @@
 - Understand the off-the-shelf mitigation (lec05)
 - Learn them from the real-world examples
 
+# Classifying Heap Vulnerabilities
+- Buffer overflow/underflow, out-of-bound read
+    - Much prevalent (i.e., quality, complexity)
+    - Much critical (i.e., larger attack surface)
+- Heap-specific issues
+    - Use-after-free (e.g., dangled pointers)
+    - Incorrect uses (e.g., double frees)
+
+# Simple High-level Interfaces
+
+~~~~{.c}
+  void *malloc(size_t size);
+  void free(void *ptr);
+  void *calloc(size_t nmemb, size_t size);
+  void *realloc(void *ptr, size_t size);
+~~~~
+
+# CS101: Heap Allocators
+
+~~~~{.c}
+Q1. malloc(0)    = ?
+Q2. malloc(-1)   = ?
+Q3. XXX.
+~~~~
+
+# Understanding Modern Heap Allocators
+
+ @img(w150%, img/heap.svg)
+
 # Exercises: Real-world Examples
 
 - CVE-2014-0160: OpenSSL

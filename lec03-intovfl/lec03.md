@@ -1,4 +1,4 @@
-@title(Lec03: Integer overflow, Taesoo Kim)
+@title(Lec03: Integer overflow and Undefined Behavior, Taesoo Kim)
 
 <style>
  #cover h2 { font-size: 50px !important; margin-bottom: 1.5em !important; }

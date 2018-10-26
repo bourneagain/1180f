@@ -1,4 +1,7 @@
 
+# Exercise: Real-world Examples
+- Ex1. Linux Perf (CVE-2009-3234/+)
+- Ex2. Linux USB (CVE-2016-4482)
 
 # Double Fetching Vulnerabilities
 - A special form of race conditions: user vs. kernel spaces
@@ -135,7 +138,3 @@ static int proc_connectinfo(struct usb_dev_state *ps,
     ...
 }
 ~~~~
-
-# Exercise: Real-world Examples
-- Ex1. Linux Perf (CVE-2009-3234/+)
-- Ex2. Linux USB (CVE-2016-4482)
