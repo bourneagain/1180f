@@ -1,15 +1,18 @@
-Libfuzzer is a coverage-based, evolutionary fuzzer. Unlike AFL,
+Libfuzzer is yet another coverage-based, evolutionary fuzzer. Unlike AFL,
 however, Libfuzzer runs "in-process" (i.e., don't fork). Thus, it can
-easily outperform #exec/s (thus cost of testing) compared with AFL.
+easily outperform #exec/s (thus cost of testing) compared to AFL.
 
 It has one fundamental caveat: the testing function, or the way you
-test, should be side-effect free, meaning that no changes of global
+test, should be side-effect free, meaning no changes of global
 states. It's really up to the developers who run Libfuzzer.
+
 
 1. Workflow
 ===========
 
-Let's take an action:
+Let's first instrument the code. At this time, it does not require a
+special wrapper unlike afl-gcc/afl-clang, as the latest clang is
+already well integrated with LibFuzzer.
 
   $ clang -fsanitize=fuzzer ex1.cc
   $ ./a.out
@@ -29,10 +32,13 @@ Let's take an action:
   }
   ~~~~
 
-Let's first understand how ex1.cc is implemented. The fuzzing always
-starts by invoking LLVMFuzzerTestOneInput() with two arguments, data
-(i.e., mutated input) and its size. For every fuzzing run, Libfuzzer
-follows these steps (similar to AFL):
+ex1.cc is essentially the same code you saw in tut1 (AFL), but it is
+tweaked a bit to support LibFuzzer. In fact, it is designed to be
+linked with libFuzzer.a (e.g., the starting main() in the
+/usr/lib/llvm-6.0/lib/libFuzzer.a). The fuzzing always starts by
+invoking LLVMFuzzerTestOneInput() with two arguments, data (i.e.,
+mutated input) and its size. For every fuzzing run, Libfuzzer follows
+these steps (similar to AFL):
 
     1) determine data and size for testing
     2) run LLVMFuzzerTestOneInput(data, size)
@@ -85,7 +91,7 @@ Let's understand the output of the fuzzer execution:
 
 Have you tried invoking ./a.out multiple times? Have you noticed that
 its output changes in every invocation? It shows that the randomness
-aspect of Libfuzzer. If you want to deterministic reproduce the
+aspect of Libfuzzer. If you want to deterministically reproduce the
 result, you can provide the seed via the "-seed" argument like:
 
  $ ./a.out -seed=107951530
@@ -101,7 +107,7 @@ It shows that #PCs are instrumented (8 PCs) and keeps track of 8-bit
 
 -max_len limits the testing input size (upto 4KB by default) and it
 runs without any corpus. If you'd like to add initial inputs, just
-create a corpus directory and provide it via another argument.
+create a corpus directory and provide it via another argument, similar to AFL.
 
   $ mkdir corpus
   $ echo AAAA > corpus/seed1
@@ -127,8 +133,10 @@ create a corpus directory and provide it via another argument.
 The mutation strategies are the most interesting field:
 
       +---> N mutations
+      |
   MS: 1 EraseBytes-
   MS: 2 ShuffleBytes-CMP- DE: "I\x00"-
+        |
         +----------------> mutation strategies
 
 There are ~15 different mutation strategies implemented in LibFuzzer
@@ -148,10 +156,10 @@ There are ~15 different mutation strategies implemented in LibFuzzer
   ~~~~
 
 As the name applies, ShuffleBytes goes over #ShuffleAmount and
-randomly shuffle each bytes ranged from ShuffleStart.
+randomly shuffles each bytes ranged from ShuffleStart.
 
 Note that the status line is reported whenever the new coverage is
-found (see "cov:" increasing on every status line).
+found (see, "cov:" increasing on every status line).
 
 5) reporting a crash
 
@@ -174,7 +182,7 @@ found (see "cov:" increasing on every status line).
   ~~~~
 
 Whenever the fuzzer catches a signal (e.g., SEGFAULT), it stops and
-reports the crashing status like above. In this case, the fuzzer hits
+reports the crashing status like above---in this case, the fuzzer hits
 __builtin_trap(). It also persistently stores the crashing input as a
 file as a result (./crash-7a8dc3985d2a90fb6e62e94910fc11d31949c348).
 
@@ -184,12 +192,13 @@ instrumented binary.
   $ ./a.out ./crash-7a8dc3985d2a90fb6e62e94910fc11d31949c348
   ...
 
+
 2. Internals
 ============
 
-Let's explore a few interesting design decision of LibFuzzer:
+Let's explore a few interesting design decisions made by LibFuzzer:
 
-1) edge coverage
+1) Edge coverage
 
 More realistically, you can check if LibFuzzer can find an input for
 strncmp()! In fact, this example indicates that having "edge" coverage
@@ -214,7 +223,7 @@ really helps in finding bugs compared with a simple code coverage.
   }
   ~~~~
 
-2) instrumentation
+2) Instrumentation
 
 The limitation of "bruteforcing" is to find an exact input condition
 concretely specified in the conditional branch, like below.
@@ -235,9 +244,9 @@ What's the chance of "randomly" picking 0xdeadbeef?
   ...
 
 You might find that LibFuzzer finds the exact input surprisingly
-quickly! In fact, when instrumenting, LibFuzzer identifies such simple
-comparison and takes them into consideration when mutating the input
-corpus.
+quickly! In fact, during instrumentation, LibFuzzer identifies such
+simple comparison and takes them into consideration when mutating the
+input corpus.
 
   $ objdump -M intel-mnemonic -d a.out
   ...
@@ -263,12 +272,14 @@ These are just tip of the iceberg. There are non-trivial amount of
 heuristics implemented in LibFuzzer/AFL, making it possible to
 discover new bugs in programs.
 
+
 3. Finding Heartbleed
 =====================
 
-Let's try to find the Heartbleed bug in openssl!
+Let's try to use LibFuzzer in finding the Heartbleed bug in openssl!
 
   ~~~~{.c}
+  // https://github.com/google/fuzzer-test-suite
   // handshake-fuzz.cc
   extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
     static int unused = Init();
@@ -284,9 +295,9 @@ Let's try to find the Heartbleed bug in openssl!
   }
   ~~~~
 
-To test SSL_do_handshake(), we first have to prepare proper
+To correctly test SSL_do_handshake(), we first have to prepare proper
 environments for openssl (e.g., SSL_new), and set up the compatible
-interfaces (e.g., BIO above) that deliver the mutated input to
+interfaces (e.g., BIOs above) that deliver the mutated input to
 SSL_do_handshake().
 
 The instrumentation process is pretty trivial:
@@ -296,7 +307,7 @@ The instrumentation process is pretty trivial:
   make CC="clang -g -fsanitize=address -fsanitize-coverage=edge,indirect-calls"
 
 However, since it takes >10 mins for compilation, we already prepared
-the instrumented openssl libraries. Your take is simply to link the
+the instrumented openssl libraries. Your task is simply to link the
 instrumented library with the fuzzing driver (handshake-fuzz.cc).
 
   $ ./build.sh
@@ -358,12 +369,16 @@ instrumented library with the fuzzing driver (handshake-fuzz.cc).
   Base64: GAMAAAEB
   ~~~~
 
-Also, you can easily debug this crash by attaching gdb to ./a.out with
+Also, you can easily debug! this crash by attaching gdb to ./a.out with
 the crashing input.
 
   $ gdb ./a.out --args
   > br tls1_process_heartbeat
   > run ./crash-bfa5076e7f2d507a9de69111111ede2469bf7555
+  ...
 
-Hope you now understand the potential of using fuzzers and apply to
+Could you trace down to 'memcpy(bp, pl, payload)' and map the crashing
+input to these variables: hbtype and payload?
+
+Hope you now understand the potential of using fuzzers, and apply to
 what you are developing!

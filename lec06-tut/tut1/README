@@ -1,6 +1,7 @@
 AFL is a coverage-based, evolutionary fuzzer as we discussed in the
-lecture. In this tutorial, we'd like to learn the workflow of applying
-fuzzers and explore its internals with a few examples.
+lecture. In this tutorial, you will learn the workflow of using
+fuzzers, and explore their internals and design decisions with a few
+simple examples.
 
 1. Workflow
 ===========
@@ -15,10 +16,11 @@ coverage map efficiently in every fuzzing invocation.
   [+] Instrumented 9 locations (64-bit, non-hardened mode, ratio 100%).
                    ----------> 9 basic blocks are instrumented
 
-Instead of using gcc, you can use afl-gcc, a wrapper script that
-enables instrumentation seamlessly without disturbing the building
-process. In a standard automake-like building environment, you can
-easily inject this compiler option via CC=afl-gcc or CC=afl-clang.
+Instead of using gcc, you can simply invoke afl-gcc, a wrapper script
+that enables instrumentation seamlessly without breaking the
+building process. In a standard automake-like building environment,
+you can easily inject this compiler option via CC=afl-gcc or
+CC=afl-clang depending on the copmiler of your choice.
 
   ~~~~{.c}
   // ex1.cc
@@ -66,11 +68,12 @@ uniquely identified with a random number:
  *1126:       48 c7 c1 e4 69 00 00    mov    rcx,0x69e4
   112d:       e8 6e 03 00 00          call   14a0 <__afl_maybe_log>
 
-The goal of the fuzzer is to find the input, "HI!". Let's see how AFL
-generates such an input, quite magically! To do so, we need to provide
-an initial input corpus and prepare the output directory. We'd like to
-start the fuzzing with "AAAA" as input, and expect AFL to convert
-"AAAA" into "HI!" that crashes the program (__builtin_trap())!
+The fuzzer's goal is to find one of crashing inputs, "HI!???...", that
+reaches the __builtin_trap() instruction. Let's see how AFL generates
+such an input, quite magically! To do so, we need to provide an
+initial input corpus, on which the fuzzer attempts to mutate based.
+Let's start the fuzzing with "AAAA" as input, expecting that AFL
+correctly convert "AAAA" into "HI!" that crashes the program.
 
   $ mkdir input output
   $ echo AAAA > input/test
@@ -104,7 +107,7 @@ start the fuzzing with "AAAA" as input, and expect AFL to convert
 
 
 There are a few interesting information in AFL's CUI:
- (ref. lec06-tut/afl-2.52b/docs/status_screen.txt)
+ (ref. afl-2.52b/docs/status_screen.txt)
 
 1) Overall results:
 
@@ -117,8 +120,8 @@ There are a few interesting information in AFL's CUI:
 
 - cycles done: the count of queue passes done so far, meaning that the
   number of times that AFL went over all the interesting test cases.
-- total paths: how many test cases discovered so far
-- unique crashes/hangs: how many crashes/hangs discovered so far
+- total paths: how many test cases discovered so far.
+- unique crashes/hangs: how many crashes/hangs discovered so far.
 
 2) Map coverage
 
@@ -143,12 +146,14 @@ This describes the progress of the current stage: e.g., which fuzzing
 strategy is applied and how much this stage is completed.
 
   (from document)
+  """
   - havoc - a sort-of-fixed-length cycle with stacked random tweaks. The
     operations attempted during this stage include bit flips, overwrites with
     random and "interesting" integers, block deletion, block duplication, plus
     assorted dictionary-related operations (if a dictionary is supplied in the
     first place).
-
+  """
+  
 4) Fuzzing strategy yields
 
   +- fuzzing strategy yields ---------------------------+
@@ -161,9 +166,10 @@ strategy is applied and how much this stage is completed.
   |        trim : 20.00%/1, 0.00%                       |
   +-----------------------------------------------------+
 
-It summarizes that how each strategies yield a new path: e.g., bit
+It summarizes how each strategies yield a new path: e.g., bit
 flips, havoc and arithmetics found new paths, helping us to determine
 which strategies work for our fuzzing target.
+
 
 2. Challenge: finding a security bug!
 =====================================
@@ -184,7 +190,8 @@ it's not too easy to find one, so let's try to use AFL.
 
 2) Generating seed inputs
 
-Let's manually explore this toy program while collecting what we are typing.
+Let's manually explore this toy program while collecting what we are
+typing as input.
 
   $ mkdir input
   $ tee input/test1 | ./registration
@@ -194,13 +201,14 @@ Let's manually explore this toy program while collecting what we are typing.
 
 3) Fuzzing time!
 
-  $ afl-fuzz -i input -o output -- ./registration
+  $ afl-fuzz -i input -o output ./registration
 
 In fact, the fuzzer fairly quickly finds a few crashing inputs! You
 can easily analyze them by manually injecting the crashing input to
 the program or by running it with gdb.
 
   $ ls output/crashes
+  id:000001,sig:06,src:000001,op:flip2,pos:18
   ...
 
 Let's pick one of the crashing inputs, and reproduce the crash like this:
@@ -295,7 +303,7 @@ You can enable ASAN simply by setting AFL_USE_ASAN=1:
 With ASAN, the program indeed stops at a different place: stopping in
 register_course() unlike aborting when free()-ing in
 unregister_course(). ASAN really helps in pinpointing the root cause
-of the security problem.
+of the security problem!
 
 
 3. Understanding the limitations of AFL
@@ -326,7 +334,7 @@ You will notice that, at this time, it quickly reports more than one
 unique crash, although all crashes are essentially same. This is
 mainly because AFL considers each input unique when each input results
 in a different coverage map (i.e., edge). Each iteration of the for
-loop (*) in strncmp() is considered unique path.
+loop (*) in strncmp() is likely considered unique path.
 
 2) Tight conditional constraints
 

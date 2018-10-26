@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Lec05: Advanced Topics in Security</title>
+<meta charset="utf-8"/>
+<meta content="ie=edge" http-equiv="x-ua-compatible"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<link href="../shower/styles/ribbon.css" rel="stylesheet"/>
+<style type="text/css">
+a.sourceLine { display: inline-block; line-height: 1.25; }
+a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+a.sourceLine:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode { white-space: pre; position: relative; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+code.sourceCode { white-space: pre-wrap; }
+a.sourceLine { text-indent: -1em; padding-left: 1em; }
+}
+pre.numberSource a.sourceLine
+{ position: relative; left: -4em; }
+pre.numberSource a.sourceLine::before
+{ content: attr(title);
+  position: relative; left: -1em; text-align: right; vertical-align: baseline;
+  border: none; pointer-events: all; display: inline-block;
+  -webkit-touch-callout: none; -webkit-user-select: none;
+  -khtml-user-select: none; -moz-user-select: none;
+  -ms-user-select: none; user-select: none;
+  padding: 0 4px; width: 4em;
+  color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+{  }
+@media screen {
+a.sourceLine::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+<style>
+section pre code {
+  line-height: 1.4 !important;
+  font-size: 20px !important;
+}
+.compact code {
+  line-height: 1.4 !important;
+  font-size: 16px !important;
+}
+ul.compact {
+  line-height: 1.5 !important;
+  font-size: 20px !important;
+}
+.writeup {
+    font-size: 20px !important;
+}
+a.sourceLine { background: none !important; }
+section.region { display: none !important; }
+pre.numberSource { margin-left: 2em; }
+div.sourceCode { overflow: hidden; }
+a.sourceLine::before { text-decoration: none; }
+
+</style>
+<script src="../shower/js/jquery-2.2.0.min.js"></script>
+</head>
+<body class="shower list">
+<header class="caption">
+<h1>Security vulnerabilities and their mitigation in native code</h1>
+<p>Taesoo Kim</p>
+</header>
+<header class="caption">
+</header>
+<section class="slide" id="cover">
+<br/><br/><br/><br/>
+<h2>Lec05: Advanced Topics in Security</h2>
+<p> Taesoo Kim</p>
+<style>
+ #cover h2 {
+   /* margin:180px 0 0; */
+   color: #666;
+   text-align:center;
+   font-size: 60px;
+   font-weight: bold;
+   margin-bottom: 0em;
+ }
+ #cover p {
+   margin:30px 0 0;
+   text-align:center;
+   font-style:italic;
+   font-size:40px;
+ }
+ </style>
+</section>
+
+<section class="slide level1" id="goals-and-lessons"><div>
+<h1>Goals and Lessons</h1>
+<ul>
+<li>Understand <em>modern</em> attack/defenses: <strong>ROP</strong> and <strong>CFI</strong></li>
+<li>Understand three classes of vulnerabilities
+<ul>
+<li><strong>Type confusion</strong>: e.g., bad casting in C++</li>
+<li><strong>Race condition</strong>: e.g., double fetching</li>
+<li><strong>Uninitialized read</strong>: e.g., struct padding issues</li>
+</ul></li>
+<li>Learn mitigation tools and automatic bug finding
+<ul>
+<li><strong>Sanitizers</strong></li>
+<li><strong>Fuzzing</strong></li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="modern-exploit-against-dep-nx"><div>
+<h1>Modern Exploit against DEP (NX)</h1>
+<ul>
+<li>Return-oriented Programming (ROP)</li>
+<li>Reusing code snippets (called gadgets) instead of injecting shellcode
+<ul>
+<li>e.g., ret-to-libc: ret → system(“/bin/sh”)</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="example-stack-smashing-wo-dep"><div>
+<h1>Example: Stack Smashing (w/o DEP)</h1>
+<div class="sourceCode" id="cb1"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb1-1" title="1">  main() {</a>
+<a class="sourceLine" id="cb1-2" title="2">    <span class="dt">char</span> buf[<span class="dv">16</span>];</a>
+<a class="sourceLine" id="cb1-3" title="3">    scanf(<span class="st">"%s"</span>, buf);</a>
+<a class="sourceLine" id="cb1-4" title="4">  }</a></code></pre></div>
+<pre><code>(top)
+  [buf  ]
+||[ ... ]
+||[ra   ]---+ 
+||[ ... ]   |
+||[shell]&lt;--+ (inject shellcode)
+||[code ]
+vv[ ... ]
+  [     ]
+ (w/o DEP)</code></pre>
+</div></section>
+<section class="slide level1" id="example-stack-smashing-vis-ret-to-libc"><div>
+<h1>Example: Stack Smashing vis Ret-to-libc</h1>
+<div class="sourceCode" id="cb3"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb3-1" title="1">  main() {</a>
+<a class="sourceLine" id="cb3-2" title="2">    <span class="dt">char</span> buf[<span class="dv">16</span>];</a>
+<a class="sourceLine" id="cb3-3" title="3">    scanf(<span class="st">"%s"</span>, buf);</a>
+<a class="sourceLine" id="cb3-4" title="4">  }</a></code></pre></div>
+<pre><code>(top)
+  [buf  ]       [buf  ]
+||[ ... ]       [ ... ]
+||[ra   ]---+   [ra   ]---&gt; system() in libc
+||[ ... ]   |   [dummy]
+||[shell]&lt;--+   [arg1 ]---&gt; "/bin/sh"
+||[code ]       [ ... ]
+vv[ ... ]       [ ... ]
+  [     ]       [     ]
+ (w/o DEP)    (ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-stack-smashing-vis-ret-to-libc-1"><div>
+<h1>Example: Stack Smashing vis Ret-to-libc</h1>
+<ul>
+<li>Q. What happens when system() returns?</li>
+<li>Q. Is there any way to “gracefully” terminate?</li>
+</ul>
+<pre><code>(top)
+  [buf  ]
+  [ ... ]
+  [ra   ]---&gt; system() in libc
+  [dummy]
+  [arg1 ]---&gt; "/bin/sh"
+  [ ... ]
+  [ ... ]
+  [     ]
+(ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-stack-smashing-vis-ret-to-libc-2"><div>
+<h1>Example: Stack Smashing vis Ret-to-libc</h1>
+<ul>
+<li>A. “dummy” → exit()</li>
+<li>A. its first argument → 0</li>
+</ul>
+<pre><code>(top)                             system("/bin/sh")
+  [buf  ]                         exit(0)
+  [ ... ]
+  [ra1  ]---&gt; system() in libc
+  [ra2  ]---&gt; exit()
+  [arg1 ]---&gt; "/bin/sh"
+  [arg2 ]---&gt; 0
+  [ ... ]
+  [     ]
+(ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-executing-two-functions"><div>
+<h1>Example: Executing Two Functions</h1>
+<ul>
+<li>The return address of main() is smashed by the buffer overflow</li>
+<li>It returns to system() instead of the original caller</li>
+</ul>
+<pre><code>main(): ret                    (top)
+                                  [buf  ]
+                                  [ ... ]
+                            esp =&gt;[ra1  ]---&gt; system() in libc
+                                  [ra2  ]---&gt; exit()
+                                  [arg1 ]---&gt; "/bin/sh"
+                                  [arg2 ]---&gt; 0
+                                  [ ... ]
+                                  [     ]
+                                (ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-executing-two-functions-1"><div>
+<h1>Example: Executing Two Functions</h1>
+<ul>
+<li>dummy (i.e., ptr to exit()) is now considered as caller of system()</li>
+<li>arg1 is the first argument of system, “/bin/sh”</li>
+</ul>
+<pre><code>main(): ret                    (top)
+system(): ..                      [buf  ]
+ caller: exit()                   [ ... ]
+ arg: "/bin/sh"                   [     ]
+                            esp =&gt;[ra2  ]---&gt; exit()
+                                  [arg1 ]---&gt; "/bin/sh"
+                                  [arg2 ]---&gt; 0
+                                  [ ... ]
+                                  [     ]
+                                (ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-executing-two-functions-2"><div>
+<h1>Example: Executing Two Functions</h1>
+<ul>
+<li>dummy (i.e., ptr to exit()) is now considered as caller of system()</li>
+<li>arg1 is the first argument of system, “/bin/sh”</li>
+</ul>
+<pre><code>main(): ret                    (top)
+system(): ret                     [buf  ]
+                                  [ ... ]
+                                  [     ]
+                            esp =&gt;[ra2  ]---&gt; exit()
+                                  [arg1 ]---&gt; "/bin/sh"
+                                  [arg2 ]---&gt; 0
+                                  [ ... ]
+                                  [     ]
+                                (ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-executing-two-functions-3"><div>
+<h1>Example: Executing Two Functions</h1>
+<ul>
+<li>dummy (i.e., ptr to exit()) is now considered as caller of system()</li>
+<li>arg1 is the first argument of system, “/bin/sh”</li>
+</ul>
+<pre><code>main(): ret                    (top)
+system(): ret                     [buf  ]
+exit():                           [ ... ]
+ caller: "/bin/sh" (!!)           [     ]
+ arg: 0                           [ra2  ]---&gt; exit()
+                            esp =&gt;[arg1 ]---&gt; "/bin/sh"
+                                  [arg2 ]---&gt; 0
+                                  [ ... ]
+                                  [     ]
+                                (ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-execution-more-than-two-funcs"><div>
+<h1>Example: Execution More than Two Funcs?</h1>
+<ul>
+<li>Can we chain three functions in this way? No!</li>
+<li>ROP generalizes this approach by using</li>
+</ul>
+<pre><code>(top)                             system("/bin/sh")
+  [buf  ]                         exit(0)
+  [ ... ]
+  [ra1  ]---&gt; system() in libc
+  [ra2  ]---&gt; exit()
+  [arg1 ]---&gt; "/bin/sh"          &lt;- "/bin/sh" vs func3?
+  [arg2 ]---&gt; 0
+  [ ... ]
+  [     ]
+(ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-rop"><div>
+<h1>Example: ROP</h1>
+<ul>
+<li>Cleaning up stacks by using pop/ret gadgets</li>
+<li>Chaining them in a general fashion!</li>
+</ul>
+<pre><code>main(): ret                    (top)
+system(): ret                     [buf  ]
+                                  [ ... ]
+                                  [     ]
+                        **  esp =&gt;[ra2  ]---&gt; exit()
+                                  [arg1 ]---&gt; "/bin/sh"
+                                  [arg2 ]---&gt; 0
+                                  [ ... ]
+                                  [     ]
+                                (ret-to-libc)</code></pre>
+</div></section>
+<section class="slide level1" id="example-rop-1"><div>
+<h1>Example: ROP</h1>
+<ul>
+<li>Cleaning up stacks by using pop/ret gadgets</li>
+<li>Chaining them in a general fashion!</li>
+</ul>
+<pre><code>main(): ret                    (top)
+system(): ret                     [buf  ]
+                                  [ ... ]
+                                  [     ]
+                        **  esp =&gt;[ra2  ]---&gt; pop/ret
+                                  [arg1 ]---&gt; "/bin/sh"
+                                  [ ... ]
+                                  [ ... ]
+                                  [     ]
+                                   (ROP)</code></pre>
+</div></section>
+<section class="slide level1" id="example-rop-2"><div>
+<h1>Example: ROP</h1>
+<ul>
+<li>Cleaning up stacks by using pop/ret gadgets</li>
+<li>Chaining them in a general fashion!</li>
+</ul>
+<pre><code>main(): ret                    (top)
+system(): ret                     [buf  ]
+pop                               [ ... ]
+                                  [     ]
+                                  [     ]
+                            esp =&gt;[arg1 ]---&gt; "/bin/sh"
+                                  [ ra  ]---&gt; exit()
+                                  [ ... ]
+                                  [arg2 ]---&gt; 0
+                                   (ROP)</code></pre>
+</div></section>
+<section class="slide level1" id="example-rop-3"><div>
+<h1>Example: ROP</h1>
+<ul>
+<li>Cleaning up stacks by using pop/ret gadgets</li>
+<li>Chaining them in a general fashion!</li>
+</ul>
+<pre><code>main(): ret                    (top)
+system(): ret                     [buf  ]
+pop                               [ ... ]
+ret                               [     ]
+                                  [     ]
+                                  [     ]
+                            esp =&gt;[ ra  ]---&gt; exit()
+                                  [ ... ]
+                                  [arg2 ]---&gt; 0
+                                   (ROP)</code></pre>
+</div></section>
+<section class="slide level1" id="example-beyond-two-functions"><div>
+<h1>Example: Beyond Two Functions!</h1>
+<ul>
+<li>Cleaning up stacks by using pop/ret gadgets</li>
+<li>Chaining them in a general fashion!</li>
+</ul>
+<pre><code>(top)                             system("/bin/sh")
+  [buf  ]                         exit(0)
+  [ ... ]                         func3(arg3, arg4)
+  [ra1  ]---&gt; system() in libc | 
+* [gadgt]---&gt; pop/ret          | system() 
+  [arg1 ]---&gt; "/bin/sh"        |
+  [ra2  ]---&gt; exit()           =
+* [gadgt]---&gt; pop/ret          = exit()
+  [arg2 ]---&gt; 0                =
+  [ra3  ]---&gt; func3()          +
+* [gadgt]---&gt; pop/pop/ret      + func3()
+  [arg3 ] ...                  +</code></pre>
+</div></section>
+<section class="slide level1" id="defenses-control-flow-integrity"><div>
+<h1>Defenses: Control-flow Integrity</h1>
+<ul>
+<li>Control-flow at the compilation time should be enforced at runtime!</li>
+<li>Vendors adoptions:
+<ul>
+<li><a href="https://docs.microsoft.com/en-us/windows/desktop/secbp/control-flow-guard">Control-flow Guard (CFG) by Microsoft from Windows 10/8.1</a></li>
+<li><a href="https://security.googleblog.com/2018/10/posted-by-sami-tolvanen-staff-software.html">LLVM forward CFI by Android (Pixel 3)</a></li>
+<li><a href="https://www.chromium.org/developers/testing/control-flow-integrity">LLVM forward CFI by Google Chrome (dev)</a></li>
+</ul></li>
+<li>Hardware solutions:
+<ul>
+<li>Intel: <a href="https://software.intel.com/sites/default/files/managed/4d/2a/control-flow-enforcement-technology-preview.pdf">Control-flow Enforcement (CET)</a></li>
+<li>ARM v8,3: <a href="https://www.apple.com/business/site/docs/iOS_Security_Guide.pdf">PAC in iOS 12 by Apple</a></li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="basic-idea-enforcing-control-flow-graphs"><div>
+<h1>Basic Idea: Enforcing Control-flow Graphs</h1>
+<ul>
+<li>Forward CFI: protecting indirect calls (e.g., jmp eax)
+<ul>
+<li>Course-grained: static call graphs</li>
+<li>Finer-grained: type-based, Input-based, etc.</li>
+</ul></li>
+<li>Backward CFI: protecting returns (e.g., ret)
+<ul>
+<li>Safe/shadow stack</li>
+</ul></li>
+</ul>
+<p>→ CPU overheads: 5-20% in forward CFIs, 1-5% in backwards CFIs</p>
+</div></section>
+<section class="slide level1" id="trends-of-vulnerability-classes"><div>
+<h1>Trends of Vulnerability Classes</h1>
+<p style="text-align:center;margin:0"><img src="img/trend.png" style="width:110%"/></p>
+<p>Ref. <a href="https://www.rsaconference.com/writable/presentations/file_upload/br-t07-exploitation-trends-from-potential-risk-to-actual-risk.pdf">Exploitation Trends: From Potential Risk to Actual Risk, RSA 2015</a></p>
+</div></section>
+<section class="slide level1" id="three-emerging-classes-of-vulnerabilities"><div>
+<h1>Three Emerging Classes of Vulnerabilities</h1>
+<ol type="1">
+<li>Type confusion: e.g., bad casting in C++</li>
+<li>Race condition: e.g., double fetching</li>
+<li>Uninitialized read: e.g., struct padding issues</li>
+</ol>
+</div></section>
+<section class="slide level1" id="type-casting-in-c"><div>
+<h1>Type Casting in C++</h1>
+<p style="text-align:center;margin:0"><img src="img/casting0.svg" style="width:50%"/></p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb17-1" title="1"><span class="kw">class</span> SVGElement: <span class="kw">public</span> Element { ... };</a>
+<a class="sourceLine" id="cb17-2" title="2"></a>
+<a class="sourceLine" id="cb17-3" title="3">SVGElement *pCanvas = <span class="kw">new</span> SVGElement();</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="type-casting-in-c-1"><div>
+<h1>Type Casting in C++</h1>
+<p style="text-align:center;margin:0"><img src="img/casting1.svg" style="width:50%"/></p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb18-1" title="1"><span class="co">// (1) valid upcast from pCanvas to pElem</span></a>
+<a class="sourceLine" id="cb18-2" title="2">Element *pElem = <span class="kw">static_cast</span>&lt;Element*&gt;(pCanvas);</a>
+<a class="sourceLine" id="cb18-3" title="3"></a>
+<a class="sourceLine" id="cb18-4" title="4"><span class="co">// (2) valid downcast from pElem to pCanvasAgain (== pCanvas)</span></a>
+<a class="sourceLine" id="cb18-5" title="5">SVGElement *pCanvasAgain = <span class="kw">static_cast</span>&lt;SVGElement*&gt;(pElem);</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="type-casting-in-c-2"><div>
+<h1>Type Casting in C++</h1>
+<p style="text-align:center;margin:0"><img src="img/casting1.svg" style="width:50%"/></p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb19-1" title="1"><span class="co">// (3) invalid downcast with dynamic_cast, but no corruption</span></a>
+<a class="sourceLine" id="cb19-2" title="2">SVGElement *p = <span class="kw">dynamic_cast</span>&lt;SVGElement*&gt;(pDom);</a>
+<a class="sourceLine" id="cb19-3" title="3"><span class="cf">if</span> (p) {</a>
+<a class="sourceLine" id="cb19-4" title="4">    p-&gt;<span class="va">m_className</span> = <span class="st">"my-canvas"</span>;</a>
+<a class="sourceLine" id="cb19-5" title="5">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="type-casting-in-c-3"><div>
+<h1>Type Casting in C++</h1>
+<p style="text-align:center;margin:0"><img src="img/casting1.svg" style="width:50%"/></p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb20-1" title="1"><span class="kw">class</span> SVGElement: <span class="kw">public</span> Element { ... };</a>
+<a class="sourceLine" id="cb20-2" title="2"></a>
+<a class="sourceLine" id="cb20-3" title="3">Element *pDom = <span class="kw">new</span> Element();</a>
+<a class="sourceLine" id="cb20-4" title="4"></a>
+<a class="sourceLine" id="cb20-5" title="5"><span class="co">// (4) invalid downcast (-&gt; undefined behavior)</span></a>
+<a class="sourceLine" id="cb20-6" title="6">SVGElement *p = <span class="kw">static_cast</span>&lt;SVGElement*&gt;(pDom);</a>
+<a class="sourceLine" id="cb20-7" title="7"></a>
+<a class="sourceLine" id="cb20-8" title="8"><span class="co">// (5) leads to memory corruption</span></a>
+<a class="sourceLine" id="cb20-9" title="9">p-&gt;<span class="va">m_className</span> = <span class="st">"my-canvas"</span>;</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="exercise-real-world-examples"><div>
+<h1>Exercise: Real-world Examples</h1>
+<ul>
+<li>Ex1. Linux Perf (CVE-2009-3234/+)</li>
+<li>Ex2. Linux USB (CVE-2016-4482)</li>
+</ul>
+</div></section>
+<section class="slide level1" id="double-fetching-vulnerabilities"><div>
+<h1>Double Fetching Vulnerabilities</h1>
+<ul>
+<li>A special form of race conditions: user vs. kernel spaces</li>
+<li>Leading to information leaks, buffer overflows, etc.</li>
+</ul>
+<p style="text-align:center;margin:0"><img src="img/doublefetch.png" style="width:95%"/></p>
+</div></section>
+<section class="slide level1" id="example-perf_copy_attr-explained"><div>
+<h1>Example: perf_copy_attr() Explained</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch1.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="example-perf_copy_attr-explained-1"><div>
+<h1>Example: perf_copy_attr() Explained</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch2.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="example-perf_copy_attr-explained-2"><div>
+<h1>Example: perf_copy_attr() Explained</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch3.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="bug-racing-in-userspace"><div>
+<h1>BUG: Racing in Userspace</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch5.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="bug-double-fetching-from-kernel"><div>
+<h1>BUG: “Double” Fetching from Kernel</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch6.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="bug-trigger-incorrect-memory-copy"><div>
+<h1>BUG: Trigger Incorrect Memory Copy</h1>
+<p style="text-align:center;margin:0"><img src="img/doublefetch7.png" style="width:90%"/></p>
+</div></section>
+<section class="slide level1" id="fixing-double-fetches"><div>
+<h1>Fixing Double Fetches</h1>
+<ul>
+<li>Partialy reading after the size attribute</li>
+<li>Ensuring the atomicity of previous checked size</li>
+</ul>
+<div class="sourceCode" id="cb21"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb21-1" title="1">  <span class="co">// @f12f42acdbb577a12eecfcebbbec41c81505c4dc</span></a>
+<a class="sourceLine" id="cb21-2" title="2">  ret = get_user(size, &amp;uattr-&gt;size);</a>
+<a class="sourceLine" id="cb21-3" title="3">  ret = copy_from_user(attr, uattr, size);</a>
+<a class="sourceLine" id="cb21-4" title="4">  ...</a>
+<a class="sourceLine" id="cb21-5" title="5"></a>
+<a class="sourceLine" id="cb21-6" title="6">  <span class="co">// overwrite with the sanitiy-checked size</span></a>
+<a class="sourceLine" id="cb21-7" title="7">+ attr-&gt;size = size; </a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2009-3234-buffer-overflow"><div>
+<h1>CVE-2009-3234: Buffer Overflow!</h1>
+<div class="sourceCode" id="cb22"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb22-1" title="1">  <span class="co">/* If we're handed a bigger struct than we know of,</span></a>
+<a class="sourceLine" id="cb22-2" title="2"><span class="co">   * ensure all the unknown bits are 0.  */</span></a>
+<a class="sourceLine" id="cb22-3" title="3">  <span class="cf">if</span> (size &gt; <span class="kw">sizeof</span>(*attr)) {</a>
+<a class="sourceLine" id="cb22-4" title="4">    ...</a>
+<a class="sourceLine" id="cb22-5" title="5">    <span class="cf">for</span> (; addr &lt; end; addr += <span class="kw">sizeof</span>(<span class="dt">unsigned</span> <span class="dt">long</span>)) {</a>
+<a class="sourceLine" id="cb22-6" title="6">      ret = get_user(val, addr);</a>
+<a class="sourceLine" id="cb22-7" title="7">      <span class="cf">if</span> (ret)</a>
+<a class="sourceLine" id="cb22-8" title="8">        <span class="cf">return</span> ret;</a>
+<a class="sourceLine" id="cb22-9" title="9">      <span class="cf">if</span> (val)</a>
+<a class="sourceLine" id="cb22-10" title="10">        <span class="cf">goto</span> err_size;</a>
+<a class="sourceLine" id="cb22-11" title="11">    }</a>
+<a class="sourceLine" id="cb22-12" title="12">  }</a>
+<a class="sourceLine" id="cb22-13" title="13">  ret = copy_from_user(attr, uattr, size); <span class="co">// Q. size?</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2009-3234-buffer-overflow-1"><div>
+<h1>CVE-2009-3234: Buffer Overflow!</h1>
+<div class="sourceCode" id="cb23"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb23-1" title="1">  <span class="co">/* If we're handed a bigger struct than we know of,</span></a>
+<a class="sourceLine" id="cb23-2" title="2"><span class="co">   * ensure all the unknown bits are 0.  */</span></a>
+<a class="sourceLine" id="cb23-3" title="3">  <span class="cf">if</span> (size &gt; <span class="kw">sizeof</span>(*attr)) {</a>
+<a class="sourceLine" id="cb23-4" title="4">    ...</a>
+<a class="sourceLine" id="cb23-5" title="5">    <span class="cf">for</span> (; addr &lt; end; addr += <span class="kw">sizeof</span>(<span class="dt">unsigned</span> <span class="dt">long</span>)) {</a>
+<a class="sourceLine" id="cb23-6" title="6">      ret = get_user(val, addr);</a>
+<a class="sourceLine" id="cb23-7" title="7">      <span class="cf">if</span> (ret)</a>
+<a class="sourceLine" id="cb23-8" title="8">        <span class="cf">return</span> ret;</a>
+<a class="sourceLine" id="cb23-9" title="9">      <span class="cf">if</span> (val)</a>
+<a class="sourceLine" id="cb23-10" title="10">        <span class="cf">goto</span> err_size;</a>
+<a class="sourceLine" id="cb23-11" title="11">    }</a>
+<a class="sourceLine" id="cb23-12" title="12">+   size = <span class="kw">sizeof</span>(*attr);</a>
+<a class="sourceLine" id="cb23-13" title="13">  }</a>
+<a class="sourceLine" id="cb23-14" title="14">  ret = copy_from_user(attr, uattr, size); <span class="co">// Q. size?</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2016-4482-linux-usb"><div>
+<h1>CVE-2016-4482: Linux USB</h1>
+<div class="sourceCode" id="cb24"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb24-1" title="1"><span class="dt">static</span> <span class="dt">int</span> proc_connectinfo(<span class="kw">struct</span> usb_dev_state *ps, </a>
+<a class="sourceLine" id="cb24-2" title="2">                            <span class="dt">void</span> __user *arg) {</a>
+<a class="sourceLine" id="cb24-3" title="3">  <span class="kw">struct</span> usbdevfs_connectinfo ci = {</a>
+<a class="sourceLine" id="cb24-4" title="4">    .devnum = ps-&gt;dev-&gt;devnum,</a>
+<a class="sourceLine" id="cb24-5" title="5">    .slow = ps-&gt;dev-&gt;speed == USB_SPEED_LOW</a>
+<a class="sourceLine" id="cb24-6" title="6">  };</a>
+<a class="sourceLine" id="cb24-7" title="7"></a>
+<a class="sourceLine" id="cb24-8" title="8">  <span class="cf">if</span> (copy_to_user(arg, &amp;ci, <span class="kw">sizeof</span>(ci)))</a>
+<a class="sourceLine" id="cb24-9" title="9">    <span class="cf">return</span> -EFAULT;</a>
+<a class="sourceLine" id="cb24-10" title="10">  <span class="cf">return</span> <span class="dv">0</span>;</a>
+<a class="sourceLine" id="cb24-11" title="11">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="padding-issues-in-struct"><div>
+<h1>Padding Issues in Struct</h1>
+<div class="sourceCode" id="cb25"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb25-1" title="1"><span class="kw">struct</span> usbdevfs_connectinfo {</a>
+<a class="sourceLine" id="cb25-2" title="2">  <span class="dt">unsigned</span> <span class="dt">int</span> devnum;  <span class="co">// 4 bytes</span></a>
+<a class="sourceLine" id="cb25-3" title="3">  <span class="dt">unsigned</span> <span class="dt">char</span> slow;   <span class="co">// 1 bytes</span></a>
+<a class="sourceLine" id="cb25-4" title="4">};</a>
+<a class="sourceLine" id="cb25-5" title="5"></a>
+<a class="sourceLine" id="cb25-6" title="6"><span class="kw">sizeof</span>(<span class="kw">struct</span> usbdevfs_connectinfo) == <span class="dv">8</span></a>
+<a class="sourceLine" id="cb25-7" title="7"></a>
+<a class="sourceLine" id="cb25-8" title="8">|&lt;---------- 8B ----------&gt;|</a>
+<a class="sourceLine" id="cb25-9" title="9">[devnum      ][slw][padding]</a>
+<a class="sourceLine" id="cb25-10" title="10">|&lt;--  4B  --&gt;|&lt;1B&gt;|&lt;--3B--&gt;|</a></code></pre></div>
+<p>Ref. <a href="https://taesoo.kim/pubs/2016/lu:unisan.pdf">Proactive Kernel Memory Initialization to Eliminate Data Leakages</a></p>
+</div></section>
+<section class="slide level1" id="struct-padding-no-proper-way-to-initialize"><div>
+<h1>Struct Padding: No Proper Way to Initialize</h1>
+<blockquote>
+<p>§6.2.6.1/6 (C11, ISO/IEC 9899:201x)<br/>
+When a value is stored in an object of structure (…), the bytes of the object representation that correspond to any padding values.</p>
+</blockquote>
+<div class="sourceCode" id="cb26"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb26-1" title="1">  <span class="kw">struct</span> usbdevfs_connectinfo ci = {</a>
+<a class="sourceLine" id="cb26-2" title="2">    .devnum = ps-&gt;dev-&gt;devnum,</a>
+<a class="sourceLine" id="cb26-3" title="3">    .slow = ps-&gt;dev-&gt;speed == USB_SPEED_LOW</a>
+<a class="sourceLine" id="cb26-4" title="4">  };</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2016-4482-patch"><div>
+<h1>CVE-2016-4482: Patch</h1>
+<div class="sourceCode" id="cb27"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb27-1" title="1"><span class="dt">static</span> <span class="dt">int</span> proc_connectinfo(<span class="kw">struct</span> usb_dev_state *ps, </a>
+<a class="sourceLine" id="cb27-2" title="2">                            <span class="dt">void</span> __user *arg) {</a>
+<a class="sourceLine" id="cb27-3" title="3">+   <span class="kw">struct</span> usbdevfs_connectinfo ci;</a>
+<a class="sourceLine" id="cb27-4" title="4">+</a>
+<a class="sourceLine" id="cb27-5" title="5">+   memset(&amp;ci, <span class="dv">0</span>, <span class="kw">sizeof</span>(ci));</a>
+<a class="sourceLine" id="cb27-6" title="6">+   ci.devnum = ps-&gt;dev-&gt;devnum;</a>
+<a class="sourceLine" id="cb27-7" title="7">+   ci.slow = ps-&gt;dev-&gt;speed == USB_SPEED_LOW;</a>
+<a class="sourceLine" id="cb27-8" title="8">    ...</a>
+<a class="sourceLine" id="cb27-9" title="9">}</a></code></pre></div>
+<ul>
+<li><a href="https://cseweb.ucsd.edu/~hovav/dist/rop.pdf">ROP</a></li>
+</ul>
+</div></section>
+<div class="progress"><div></div></div>
+<script src="../shower/js/shower.js"></script>
+</body>
+</html>
