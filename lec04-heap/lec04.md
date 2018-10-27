@@ -480,6 +480,10 @@ void IA5_7BIT_decode(unsigned char *dest,
 }
 ~~~~
 
+# Security Implication of off-byte-one (NULL)
+
+ @img(w100%, img/heap-off-by-one.svg)
+
 # CVE-2018-17182: Linux vmcache\*
 
 - An optimization path for the single thread
@@ -497,6 +501,13 @@ void vmacache_flush_all(struct mm_struct *mm) {
   ...
 }
 ~~~~
+
+# Summary
+- Two classes of **heap**-related vulnerabilities
+    - Traditional: buffer overflow/underflow, out-of-bound read
+    - Specific: **use-after-free**, **dangled pointers**, double free
+- Understand why they are security critical and non-trivial to eliminate!
+- Mitigation approaches taken by allocators
 
 # References
 

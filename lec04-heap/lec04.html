@@ -826,6 +826,10 @@ sz=32 [ -]---&gt;NULL
 <a class="sourceLine" id="cb27-12" title="12">  <span class="cf">return</span>;</a>
 <a class="sourceLine" id="cb27-13" title="13">}</a></code></pre></div>
 </div></section>
+<section class="slide level1" id="security-implication-of-off-byte-one-null"><div>
+<h1>Security Implication of off-byte-one (NULL)</h1>
+<p style="text-align:center;margin:0"><img src="img/heap-off-by-one.svg" style="width:100%"/></p>
+</div></section>
 <section class="slide level1" id="cve-2018-17182-linux-vmcache"><div>
 <h1>CVE-2018-17182: Linux vmcache*</h1>
 <ul>
@@ -844,6 +848,18 @@ sz=32 [ -]---&gt;NULL
 <a class="sourceLine" id="cb28-7" title="7">    <span class="cf">return</span>;</a>
 <a class="sourceLine" id="cb28-8" title="8">  ...</a>
 <a class="sourceLine" id="cb28-9" title="9">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="summary"><div>
+<h1>Summary</h1>
+<ul>
+<li>Two classes of <strong>heap</strong>-related vulnerabilities
+<ul>
+<li>Traditional: buffer overflow/underflow, out-of-bound read</li>
+<li>Specific: <strong>use-after-free</strong>, <strong>dangled pointers</strong>, double free</li>
+</ul></li>
+<li>Understand why they are security critical and non-trivial to eliminate!</li>
+<li>Mitigation approaches taken by allocators</li>
+</ul>
 </div></section>
 <section class="slide level1" id="references"><div>
 <h1>References</h1>

@@ -1,14 +1,9 @@
-@title(Lec03: Integer overflow and Undefined Behavior, Taesoo Kim)
-
-<style>
- #cover h2 { font-size: 50px !important; margin-bottom: 1.5em !important; }
-</style>
+@title(Lec03: Integer Overflow and Undefined Behavior, Taesoo Kim)
 
 # Goals and Lessons
-- Learn about three classes of vulnerabilities
-    1. Integer overflow (undefined behavior)
-    1. Race condition
-    1. Uninitialized reads
+- Learn about two classes of vulnerabilities
+    1. Integer overflow
+    1. Undefined behavior
 - Understand their security implications
 - Understand best security practices
 - Learn them from the real-world examples (Android, Linux, etc)
@@ -25,17 +20,17 @@ Ref. <https://en.wikipedia.org/wiki/Integer_overflow>
 ~~~~
 e.g., in x86 (32-bit, 4-byte):
     - 0x00000000 ->  0
+    - 0xffffffff -> -1
     - 0x7fffffff ->  2147483648 (INT_MAX)
     - 0x80000000 -> -2147483649 (INT_MIN)
-    - 0xffffffff -> -1
 ~~~~
 Ref. <https://en.wikipedia.org/wiki/Two's_complement>
 
 # Arithmetic with Two's Complements
-- One instruction works for both sign/unsigned integers (i.e., add, sub, mul)
+- One instruction works for **both** sign/unsigned integers (i.e., add, sub, mul)
     - e.g., add reg1, reg2 (not distinguishing signedness of reg1/2)
-- Properties
-    - Non-symmetric representation of range, but single 0
+- Properties:
+    - Non-symmetric representation of range, so single 0
     - MSB represents signedness: 1 means negative, 0 means positive
 
 ~~~~
@@ -66,16 +61,13 @@ Ref. <https://en.wikipedia.org/wiki/Two's_complement>
 - OF: overflow of signed arithmetic operations
 
 ~~~~
-    0x00000001 + 0x00000002 = 0x00000003 ( 1 + 2 = 3)
+  0x00000001 + 0x00000002 = 0x00000003 ( 1 + 2 = 3)
     -> CF: 0   OF: 0    SF: 0
-    
-    0xffffffff + 0x00000002 = 0x00000001 (-1 + 2 = 1)
+  0xffffffff + 0x00000002 = 0x00000001 (-1 + 2 = 1)
     -> CF: 1   OF: 0    SF: 0
-
-    0x80000000 + 0xffffffff = 0x7fffffff (-2147483649 + -1 =  2147483648)
+  0x80000000 + 0xffffffff = 0x7fffffff (-2147483649 + -1 =  2147483648)
     -> CF: 1   OF: 1    SF: 0
-
-    0x7fffffff + 0x00000001 = 0x80000000 ( 2147483648 +  1 = -2147483649)
+  0x7fffffff + 0x00000001 = 0x80000000 ( 2147483648 +  1 = -2147483649)
     -> CF: 0   OF: 1    SF: 1
 ~~~~
 
@@ -140,6 +132,7 @@ $ ./intovfl2
   (unsigned int)(unsigned char): 000000ff
   ; mov eax, 0x7fffffff
   ; movzx eax, al
+  
   (unsigned int)(char)         : ffffffff
   ; mov eax, 0x7fffffff
   ; movsx eax, al
@@ -151,8 +144,11 @@ $ ./intovfl2
 char c1 = 100;
 char c2 = 3;
 char c3 = 4;
+
 c1 = c1 * c2 / c3;
-     -------
+     ------- Q1?
+     ------------ Q2?
+
   1) 300 / 4 = 75
   2) 300 (0x12c, which is > 8 bytes) -> 0x2c / 4 = 11
 ~~~
@@ -160,7 +156,7 @@ c1 = c1 * c2 / c3;
 # Basic Concept: Integer Promotion
 
 - Before any arithmetic operations,
-- All integer types whose size is < sizeof(int):
+- All integer types whose size is smaller than sizeof(int):
     1. Promote to int (if int can represent the whole range)
     2. Promote to unsigned int (if not)
 
@@ -171,6 +167,7 @@ c1 = c1 * c2 / c3;
   // by rule 1. -> (1)
   char sc = SCHAR_MAX;
   unsigned char uc = UCHAR_MAX;
+  
   long long sll = sc + uc;
 
       1) (unsigned long long)((int)sc + (int)uc)?
@@ -183,7 +180,8 @@ c1 = c1 * c2 / c3;
   // by rule 2. -> (2)
   int si = -1;
   unsigned int ui = 1;
-  printf("%d\n", (int)(si < ui);
+  
+  printf("%d\n", (int)(si < ui));
                1) ui promotes to int
                   = -1 < 1
                   = 1
@@ -193,9 +191,9 @@ c1 = c1 * c2 / c3;
 ~~~~
 
 # Remark: Undefined Behaviors
-- Overflow of unsigned integers are well-defined (i.e., wrapping)
+- Overflow of **unsigned integers** are **well-defined** (i.e., wrapping)
 - Overflow of **signed** integers are **undefined**
-    - But well-defined to the processor (i.e., wrapping in x86)
+    - But well-defined to the processor (i.e., just wrapping in x86)
     - Optimization takes advantages of this, making it hard to understand
 
 # CS101: Int. Ovfl. and Undefined Behavior
@@ -206,9 +204,31 @@ c1 = c1 * c2 / c3;
 ~~~
 
 # CS101: Int. Ovfl. and Undefined Behavior
+
+~~~{.c}
+1. (in x86_64) what does the expression  1 > 0  evaluate to?
+    (a) 0   (b) 1   (c) NaN   (d) -1    (e) undefined
+
+>> (a)
+ 
+   (int) 1 > (int) 0
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
 ~~~{.c}
 2. (unsigned short)1 > -1?
     (a) 1   (b) 0   (c) -1    (d) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+2. (unsigned short)1 > -1?
+    (a) 1   (b) 0   (c) -1    (d) undefined
+
+>> (a)
+
+   unsigned short can be represented by int
+   (int)(unsigned short)1 > (int)-1
 ~~~
 
 # CS101: Int. Ovfl. and Undefined Behavior
@@ -219,14 +239,52 @@ c1 = c1 * c2 / c3;
 
 # CS101: Int. Ovfl. and Undefined Behavior
 ~~~{.c}
+3. -1U > 0?
+    (a) 1   (b) 0   (c) -1    (d) undefined
+
+>> (a)
+   
+   unsigned int can't be represented by int,
+     so promote to unsigned int
+   (unsigned int)(-1U) = 0xffffffff > 0
+~~~
+
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
 4. UINT_MAX + 1?
     (a) 0   (b) 1   (c) INT_MAX   (d) UINT_MAX  (e) undefined
 ~~~
 
 # CS101: Int. Ovfl. and Undefined Behavior
 ~~~{.c}
-5. abs(-2147483648), abs(INT_MIN)?
+4. UINT_MAX + 1?
+    (a) 0   (b) 1   (c) INT_MAX   (d) UINT_MAX  (e) undefined
+
+>> (a)
+
+   simply wrap around: 0xffffffff + 1 = 0 (CR = 1)
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+5. abs(-2147483648), abs(INT_MIN) in x86_32?
     (a) 0  (b) < 0  (c) > 0  (d) NaN
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+5. abs(-2147483648), abs(INT_MIN) in x86_32?
+    (a) 0  (b) < 0  (c) > 0  (d) NaN
+
+>> (b)
+   Undefined, but the way the processor works:
+
+   int abs (int i) {
+     return i < 0 ? -i : i;
+   }
+  
+   Q. What about in x86 (64-bit)?
 ~~~
 
 # CS101: Int. Ovfl. and Undefined Behavior
@@ -237,8 +295,29 @@ c1 = c1 * c2 / c3;
 
 # CS101: Int. Ovfl. and Undefined Behavior
 ~~~{.c}
+6. 1U << 0?
+    (a) 1   (b) 4  (c) UINT_MAX  (d) 0  (e) undefined
+
+>> (a)
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
 7. 1U << 32?
     (a) 1   (b) 4  (c) UINT_MAX  (d) INT_MIN  (e) 0  (f) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+7. 1U << 32?
+    (a) 1   (b) 4  (c) UINT_MAX  (d) INT_MIN  (e) 0  (f) undefined
+
+>> (f) in C
+   
+   x86 (32-bit), 1U << 32 == 1!
+   shl edx,cl
+
+   Q. 1U << -1?
 ~~~
 
 # CS101: Int. Ovfl. and Undefined Behavior
@@ -249,7 +328,33 @@ c1 = c1 * c2 / c3;
 
 # CS101: Int. Ovfl. and Undefined Behavior
 ~~~{.c}
+8. -1L << 2?
+    (a) 0   (b) 4  (c) INT_MAX  (d) INT_MIN   (e) undefined
+    
+>> (e) in C
+
+   shift operations on sign integers are undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
 9. INT_MAX + 1?
+    (a) 0   (b) 1  (c) INT_MAX  (d) UINT_MAX  (e) undefined
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+9. INT_MAX + 1?
+    (a) 0   (b) 1  (c) INT_MAX  (d) UINT_MAX  (e) undefined
+
+>> (e) in C
+
+   overflow in sign integers are undefined!
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+10. UINT_MAX + 1?
     (a) 0   (b) 1  (c) INT_MAX  (d) UINT_MAX  (e) undefined
 ~~~
 
@@ -257,6 +362,8 @@ c1 = c1 * c2 / c3;
 ~~~{.c}
 10. UINT_MAX + 1?
     (a) 0   (b) 1  (c) INT_MAX  (d) UINT_MAX  (e) undefined
+
+>> (a)
 ~~~
 
 # CS101: Int. Ovfl. and Undefined Behavior
@@ -268,6 +375,15 @@ c1 = c1 * c2 / c3;
 
 # CS101: Int. Ovfl. and Undefined Behavior
 ~~~{.c}
+11. -INT_MIN?
+    (a) 0   (b) 1  (c) INT_MAX  (d) UINT_MAX  (e) INT_MIN
+    (f) undefined
+
+>> (f) in C but reuslts in (e)
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
 12. -1L > 1U? on x86_64 and x86
     (a) (0, 0)  (b) (1, 1)  (c) (0, 1)  (d) (1, 0)  
     (e) undefined
@@ -275,7 +391,28 @@ c1 = c1 * c2 / c3;
 
 # CS101: Int. Ovfl. and Undefined Behavior
 ~~~{.c}
+12. -1L > 1U? on x86_64 and x86
+    (a) (0, 0)  (b) (1, 1)  (c) (0, 1)  (d) (1, 0)  
+    (e) undefined
+    
+>> (c)
+
+   x86_64: size(long) > sizeof(unsigned int)
+     -> (long)-1L > (long)1U
+   x86: sizeo(long) == sizeof(unsigned int)
+     -> (unsigned int)-1L > (unsigned int) 1U
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
 BONUS. is it possible that a / b < 0 when a < 0 and b < 0?
+~~~
+
+# CS101: Int. Ovfl. and Undefined Behavior
+~~~{.c}
+BONUS. is it possible that a / b < 0 when a < 0 and b < 0?
+
+ a = INT_MIN && b == -1!
 ~~~
 
 # Integer-related Vulnerabilities
@@ -365,6 +502,7 @@ static unsigned long randomize_stack_top(unsigned long stack_top) {
 //   req->tp_block_size: unsigned int
 //   BLK_PLUS_PRIV(..) : unsigned int
 
+// Q. What if we don't have (int)?
 if (po->tp_version >= TPACKET_V3 &&
 *   (int)(req->tp_block_size -
 *         BLK_PLUS_PRIV(req_u->req3.tp_sizeof_priv)) <= 0)
@@ -392,6 +530,7 @@ if (po->tp_version >= TPACKET_V3 &&
 ~~~~{.c}
   $ cd lec03-intovfl/intovfl
   $ make
+
   $ ./uintcmp
   0 < 1 = 1?
     (int)(0 - 1) == -1 <= 0? -> 1
@@ -416,7 +555,7 @@ if (po->tp_version >= TPACKET_V3 &&
 return addr & ~(uintptr_t)((1 << nap->align_boundary) - 1);
                            +-------------------------
                            |
-                           +--> (1 << 32) == 1 in gcc!
+                           +--> (1 << 32) -> 1 in gcc!
 ~~~~
 
 Ref. <https://bugs.chromium.org/p/nativeclient/issues/detail?id=245>
@@ -534,6 +673,18 @@ bool __builtin_uadd_overflow (unsigned int a, unsigned int b,
 ...
 ~~~~
 
+# Taking Advantage of E/RFLAGS in x86
+
+~~~~{.c}
+    bool __builtin_add_overflow (type1 a, type2 b, type3 *res);
+
+    11bb:   mov    ecx,0x0
+    11c0:   add    eax,edx
+    11c2:   jno    11c9 <main+0x70>
+    11c4:   mov    ecx,0x1
+    llc9:   ...
+~~~~
+
 # Example: New calloc()
 
 ~~~~{.c .numberLines}
@@ -554,6 +705,8 @@ void * calloc (size_t x, size_t y) {
 - 2015: FAA requested to reset Boeing 787 every 248 days
 - 2016: a Casino machine printed a prize ticket of $42,949,672!
 
+Ref. <https://en.wikipedia.org/wiki/Integer_overflow>
+
 # Not Abusing Int-related BU in Optimizer
 
 - Option: -fwrapv (gcc/clang)
@@ -572,12 +725,33 @@ void * calloc (size_t x, size_t y) {
 
 ; - ref. https://kristerw.blogspot.com/2016/02/how-undefined-signed-overflow-enables.html
 ; - ref. https://nullprogram.com/blog/2018/07/20/
-; - -fwrapv
-; - -fno-strict-aliasing
 
 # Exercise: Real-world Examples
 - Ex1. Android Stagefright (CVE-2015-1538, CVE-2015-3824)
 - Ex2. Linux Keyring (CVE-2016-0728)
+
+# Exercise: Real-world Examples
+- Ex1. Android Stagefright (CVE-2015-1538, CVE-2015-3824)
+    - -> Remote exploit on Android via MMS
+- Ex2. Linux Keyring (CVE-2016-0728)
+    - -> Local privilege escalation
+
+# CVE-2015-1538: Android (Stagefright)
+
+- Result in out-of-bound writes after integer overflows
+
+~~~~{.c .numberLines}
+// @edd4a76eb4747bd19ed122df46fa46b452c12a0d
+// CVE-2015-1538
+//   uint32_t mTimeToSampleCount;
+
+     mTimeToSampleCount = U32_AT(&header[4]);
+     mTimeToSample = new uint32_t[mTimeToSampleCount * 2];
+     ...
+     for (uint32_t i = 0; i < mTimeToSampleCount * 2; ++i)
+        mTimeToSample[i] = ntohl(mTimeToSample[i]);
+     ...
+~~~~
 
 # CVE-2015-1538: Android (Stagefright)
 
@@ -585,11 +759,13 @@ void * calloc (size_t x, size_t y) {
 // @edd4a76eb4747bd19ed122df46fa46b452c12a0d
 // CVE-2015-1538
      mTimeToSampleCount = U32_AT(&header[4]);
-+    uint64_t allocSize = mTimeToSampleCount * 2 * sizeof(uint32_t);
++    uint64_t allocSize \
++               = mTimeToSampleCount * 2 * sizeof(uint32_t);
 +    if (allocSize > SIZE_MAX) {
 +      return ERROR_OUT_OF_RANGE;
 +    }
      mTimeToSample = new uint32_t[mTimeToSampleCount * 2];
+     ...
 ~~~~
 
 # CVE-2015-3824: Android (Stagefright)
@@ -597,7 +773,7 @@ void * calloc (size_t x, size_t y) {
 ~~~~{.c .numberLines}
 // @463a6f807e187828442949d1924e143cf07778c6
 // CVE-2015-3824
--    uint8_t *buffer = new (std::nothrow) uint8_t[size + chunk_size];
+-    uint8_t *buffer = new uint8_t[size + chunk_size];
 +    if (SIZE_MAX - chunk_size <= size) {
 +      return ERROR_MALFORMED;
 +    }
@@ -606,9 +782,11 @@ void * calloc (size_t x, size_t y) {
 ~~~~
 
 # CVE-2016-0728: Linux Keyring
+- Forcing the refcnt to be overflowed, resulting in privlege escalation!
+
 ~~~~{.c .numberLines}
 long join_session_keyring(const char *name) {
-  // refcnt is incremented on "success"!
+  // NOTE. refcnt is incremented on "success"!
   keyring = find_keyring_by_name(name, false); 
   if (PTR_ERR(keyring) == -ENOKEY) { ... } 
   else if (IS_ERR(keyring)) { ... }
@@ -616,19 +794,23 @@ long join_session_keyring(const char *name) {
     ret = 0;
     goto error2;
   }
+  ...
+  key_put(keyring);
  error2:
-  mutex_unlock(&key_session_mutex);
- error:
-  abort_creds(new);
   return ret;
 }
 ~~~~
 
+# Summary
+- Two classes of vulnerabilities:
+    1. Integer overflow
+    1. Undefined behavior
+- They are likely to have serious security implications when happened!
+- Common patterns and known ways to mitigate/elliminate them!
+
 # References
 
 - [Stagefright Bugs](https://www.blackhat.com/docs/us-15/materials/us-15-Drake-Stagefright-Scary-Code-In-The-Heart-Of-Android.pdf)
-- Deadline: [paper](https://taesoo.kim/pubs/2018/xu:deadline.pdf)/[slides](https://taesoo.kim/pubs/2018/xu:deadline-slides.pdf)
-- Unisan: [paper](https://taesoo.kim/pubs/2016/lu:unisan.pdf)/[slides](https://taesoo.kim/pubs/2016/lu:unisan-slides.pdf)
 - [Basic Integer Overflows](http://phrack.org/issues/60/10.html)
 - [Integer Rules](https://wiki.sei.cmu.edu/confluence/display/c/INT02-C.+Understand+integer+conversion+rules)
 - [CVE-2017-7308](https://googleprojectzero.blogspot.com/2017/05/exploiting-linux-kernel-via-packet.html)

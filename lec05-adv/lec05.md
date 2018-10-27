@@ -526,9 +526,10 @@ static int proc_connectinfo(struct usb_dev_state *ps,
 
 # References
 
-- [Return-oriented Programming](https://www.blackhat.com/presentations/bh-usa-08/Shacham/BH_US_08_Shacham_Return_Oriented_Programming.pdf)
 - [CVE-2016-4482](https://bugzilla.redhat.com/show_bug.cgi?id=1332932)
 - [CVE-2013-0912](https://nvd.nist.gov/vuln/detail/CVE-2013-0912)
 - [CVE-2009-3234](https://www.oreilly.com/library/view/a-guide-to/9781597494861/OEBPS/B9781597494861000048a.htm)
 - [Proactive Kernel Memory Initialization to Eliminate Data Leakages](https://taesoo.kim/pubs/2016/lu:unisan.pdf)
 - [Precise and Scalable Detection of Double-Fetch Bugs in OS Kernels](https://taesoo.kim/pubs/2018/xu:deadline.pdf)
+- [Return-oriented Programming](https://www.blackhat.com/presentations/bh-usa-08/Shacham/BH_US_08_Shacham_Return_Oriented_Programming.pdf)
+- Unisan: [paper](https://taesoo.kim/pubs/2016/lu:unisan.pdf)/[slides](https://taesoo.kim/pubs/2016/lu:unisan-slides.pdf)
