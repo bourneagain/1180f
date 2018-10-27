@@ -6,9 +6,7 @@
     - **Type confusion**: e.g., bad casting in C++
     - **Race condition**: e.g., double fetching
     - **Uninitialized read**: e.g., struct padding issues
-- Learn mitigation tools and automatic bug finding
-    - **Sanitizers**
-    - **Fuzzing**
+- Learn them from real-world examples (e.g., Chrome, Linux)
 
 # Modern Exploit against DEP (NX)
 - Return-oriented Programming (ROP)
@@ -294,6 +292,10 @@ ret                               [     ]
 
 -> CPU overheads: 5-20% in forward CFIs, 1-5% in backwards CFIs
 
+;
+; XXX. add -lto -fcfi? example?
+;
+
 # Trends of Vulnerability Classes
 
  @img(w110%, img/trend.png)
@@ -315,7 +317,7 @@ class SVGElement: public Element { ... };
 SVGElement *pCanvas = new SVGElement();
 ~~~~
 
-# Type Casting in C++
+# Upcasting and Downcasting in C++
 
  @img(w50%, img/casting1.svg)
 
@@ -327,11 +329,13 @@ Element *pElem = static_cast<Element*>(pCanvas);
 SVGElement *pCanvasAgain = static_cast<SVGElement*>(pElem);
 ~~~~
 
-# Type Casting in C++
+# Dynamic Casting in C++ (Downcasting)
 
- @img(w50%, img/casting1.svg)
+ @img(w50%, img/casting2.svg)
 
 ~~~~{.cc .numberLines}
+Element *pDom = new Element();
+
 // (3) invalid downcast with dynamic_cast, but no corruption
 SVGElement *p = dynamic_cast<SVGElement*>(pDom);
 if (p) {
@@ -339,26 +343,34 @@ if (p) {
 }
 ~~~~
 
-# Type Casting in C++
+# Static Casting in C++ (Downcasting)
 
- @img(w50%, img/casting1.svg)
+ @img(w50%, img/casting2.svg)
 
 ~~~~{.cc .numberLines}
-class SVGElement: public Element { ... };
-
-Element *pDom = new Element();
-
-// (4) invalid downcast (-> undefined behavior)
+// (4) BUG: invalid downcast
 SVGElement *p = static_cast<SVGElement*>(pDom);
 
-// (5) leads to memory corruption
+// (5) leads to memory corruption!
 p->m_className = "my-canvas";
 ~~~~
 
+# Type Confusion: Bad Casting in C++
+- Two (important) type castings:
+    1. static_cast<>: verify the correctness at compilation
+    2. dynamic_cast<>: verify the correctness at runtime
+- Incorrect downcasting (via static_cast<>) results in memory violation
+- dynamic_cast<> requires RTTI, incurring non-trivial perf. overheads
+
+# CVE-2013-0912 and Pwn2Own 2013
+
+ @img(w80%, img/svg-class-hierarchy.svg)
 
 # Exercise: Real-world Examples
 - Ex1. Linux Perf (CVE-2009-3234/+)
+    - -> Race condition: double fetching in Linux
 - Ex2. Linux USB (CVE-2016-4482)
+    - -> Uninitialized read via struct padding
 
 # Double Fetching Vulnerabilities
 - A special form of race conditions: user vs. kernel spaces
@@ -385,8 +397,8 @@ p->m_className = "my-canvas";
  @img(w90%, img/doublefetch7.png)
 
 # Fixing Double Fetches
-- Partialy reading after the size attribute
-- Ensuring the atomicity of previous checked size
+1. Partialy reading after the size attribute
+1. Ensuring the atomicity of previous checked size
 
 ~~~~{.c .numberLines}
   // @f12f42acdbb577a12eecfcebbbec41c81505c4dc
@@ -434,6 +446,12 @@ p->m_className = "my-canvas";
   }
   ret = copy_from_user(attr, uattr, size); // Q. size?
 ~~~~
+
+# Exercise: Real-world Examples
+- Ex1. Linux Perf (CVE-2009-3234/+)
+    - -> Race condition: double fetching in Linux
+- Ex2. Linux USB (CVE-2016-4482)
+    - -> Uninitialized read via struct padding
 
 # CVE-2016-4482: Linux USB
 
@@ -484,6 +502,8 @@ Ref. [Proactive Kernel Memory Initialization to Eliminate Data Leakages](https:/
 
 # CVE-2016-4482: Patch
 
+- Zero-ing out via memset(): initializing two times!
+
 ~~~~{.c .numberLines}
 static int proc_connectinfo(struct usb_dev_state *ps, 
                             void __user *arg) {
@@ -496,4 +516,19 @@ static int proc_connectinfo(struct usb_dev_state *ps,
 }
 ~~~~
 
-- [ROP](https://cseweb.ucsd.edu/~hovav/dist/rop.pdf)
+# Summary
+- Modern attacks are using **ROP** to defeat DEP/NX
+- Learn three emerging, critical classes of vulnerabilities
+    - **Type confusion**: e.g., bad casting in C++
+    - **Race condition**: e.g., double fetching
+    - **Uninitialized read**: e.g., struct padding issues
+
+
+# References
+
+- [Return-oriented Programming](https://www.blackhat.com/presentations/bh-usa-08/Shacham/BH_US_08_Shacham_Return_Oriented_Programming.pdf)
+- [CVE-2016-4482](https://bugzilla.redhat.com/show_bug.cgi?id=1332932)
+- [CVE-2013-0912](https://nvd.nist.gov/vuln/detail/CVE-2013-0912)
+- [CVE-2009-3234](https://www.oreilly.com/library/view/a-guide-to/9781597494861/OEBPS/B9781597494861000048a.htm)
+- [Proactive Kernel Memory Initialization to Eliminate Data Leakages](https://taesoo.kim/pubs/2016/lu:unisan.pdf)
+- [Precise and Scalable Detection of Double-Fetch Bugs in OS Kernels](https://taesoo.kim/pubs/2018/xu:deadline.pdf)

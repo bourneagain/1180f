@@ -134,11 +134,7 @@ a.sourceLine::before { text-decoration: none; }
 <li><strong>Race condition</strong>: e.g., double fetching</li>
 <li><strong>Uninitialized read</strong>: e.g., struct padding issues</li>
 </ul></li>
-<li>Learn mitigation tools and automatic bug finding
-<ul>
-<li><strong>Sanitizers</strong></li>
-<li><strong>Fuzzing</strong></li>
-</ul></li>
+<li>Learn them from real-world examples (e.g., Chrome, Linux)</li>
 </ul>
 </div></section>
 <section class="slide level1" id="modern-exploit-against-dep-nx"><div>
@@ -443,8 +439,8 @@ ret                               [     ]
 <a class="sourceLine" id="cb17-2" title="2"></a>
 <a class="sourceLine" id="cb17-3" title="3">SVGElement *pCanvas = <span class="kw">new</span> SVGElement();</a></code></pre></div>
 </div></section>
-<section class="slide level1" id="type-casting-in-c-1"><div>
-<h1>Type Casting in C++</h1>
+<section class="slide level1" id="upcasting-and-downcasting-in-c"><div>
+<h1>Upcasting and Downcasting in C++</h1>
 <p style="text-align:center;margin:0"><img src="img/casting1.svg" style="width:50%"/></p>
 <div class="sourceCode" id="cb18"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb18-1" title="1"><span class="co">// (1) valid upcast from pCanvas to pElem</span></a>
 <a class="sourceLine" id="cb18-2" title="2">Element *pElem = <span class="kw">static_cast</span>&lt;Element*&gt;(pCanvas);</a>
@@ -452,33 +448,53 @@ ret                               [     ]
 <a class="sourceLine" id="cb18-4" title="4"><span class="co">// (2) valid downcast from pElem to pCanvasAgain (== pCanvas)</span></a>
 <a class="sourceLine" id="cb18-5" title="5">SVGElement *pCanvasAgain = <span class="kw">static_cast</span>&lt;SVGElement*&gt;(pElem);</a></code></pre></div>
 </div></section>
-<section class="slide level1" id="type-casting-in-c-2"><div>
-<h1>Type Casting in C++</h1>
-<p style="text-align:center;margin:0"><img src="img/casting1.svg" style="width:50%"/></p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb19-1" title="1"><span class="co">// (3) invalid downcast with dynamic_cast, but no corruption</span></a>
-<a class="sourceLine" id="cb19-2" title="2">SVGElement *p = <span class="kw">dynamic_cast</span>&lt;SVGElement*&gt;(pDom);</a>
-<a class="sourceLine" id="cb19-3" title="3"><span class="cf">if</span> (p) {</a>
-<a class="sourceLine" id="cb19-4" title="4">    p-&gt;<span class="va">m_className</span> = <span class="st">"my-canvas"</span>;</a>
-<a class="sourceLine" id="cb19-5" title="5">}</a></code></pre></div>
+<section class="slide level1" id="dynamic-casting-in-c-downcasting"><div>
+<h1>Dynamic Casting in C++ (Downcasting)</h1>
+<p style="text-align:center;margin:0"><img src="img/casting2.svg" style="width:50%"/></p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb19-1" title="1">Element *pDom = <span class="kw">new</span> Element();</a>
+<a class="sourceLine" id="cb19-2" title="2"></a>
+<a class="sourceLine" id="cb19-3" title="3"><span class="co">// (3) invalid downcast with dynamic_cast, but no corruption</span></a>
+<a class="sourceLine" id="cb19-4" title="4">SVGElement *p = <span class="kw">dynamic_cast</span>&lt;SVGElement*&gt;(pDom);</a>
+<a class="sourceLine" id="cb19-5" title="5"><span class="cf">if</span> (p) {</a>
+<a class="sourceLine" id="cb19-6" title="6">    p-&gt;<span class="va">m_className</span> = <span class="st">"my-canvas"</span>;</a>
+<a class="sourceLine" id="cb19-7" title="7">}</a></code></pre></div>
 </div></section>
-<section class="slide level1" id="type-casting-in-c-3"><div>
-<h1>Type Casting in C++</h1>
-<p style="text-align:center;margin:0"><img src="img/casting1.svg" style="width:50%"/></p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb20-1" title="1"><span class="kw">class</span> SVGElement: <span class="kw">public</span> Element { ... };</a>
-<a class="sourceLine" id="cb20-2" title="2"></a>
-<a class="sourceLine" id="cb20-3" title="3">Element *pDom = <span class="kw">new</span> Element();</a>
-<a class="sourceLine" id="cb20-4" title="4"></a>
-<a class="sourceLine" id="cb20-5" title="5"><span class="co">// (4) invalid downcast (-&gt; undefined behavior)</span></a>
-<a class="sourceLine" id="cb20-6" title="6">SVGElement *p = <span class="kw">static_cast</span>&lt;SVGElement*&gt;(pDom);</a>
-<a class="sourceLine" id="cb20-7" title="7"></a>
-<a class="sourceLine" id="cb20-8" title="8"><span class="co">// (5) leads to memory corruption</span></a>
-<a class="sourceLine" id="cb20-9" title="9">p-&gt;<span class="va">m_className</span> = <span class="st">"my-canvas"</span>;</a></code></pre></div>
+<section class="slide level1" id="static-casting-in-c-downcasting"><div>
+<h1>Static Casting in C++ (Downcasting)</h1>
+<p style="text-align:center;margin:0"><img src="img/casting2.svg" style="width:50%"/></p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb20-1" title="1"><span class="co">// (4) </span><span class="al">BUG</span><span class="co">: invalid downcast</span></a>
+<a class="sourceLine" id="cb20-2" title="2">SVGElement *p = <span class="kw">static_cast</span>&lt;SVGElement*&gt;(pDom);</a>
+<a class="sourceLine" id="cb20-3" title="3"></a>
+<a class="sourceLine" id="cb20-4" title="4"><span class="co">// (5) leads to memory corruption!</span></a>
+<a class="sourceLine" id="cb20-5" title="5">p-&gt;<span class="va">m_className</span> = <span class="st">"my-canvas"</span>;</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="type-confusion-bad-casting-in-c"><div>
+<h1>Type Confusion: Bad Casting in C++</h1>
+<ul>
+<li>Two (important) type castings:
+<ol type="1">
+<li>static_cast&lt;&gt;: verify the correctness at compilation</li>
+<li>dynamic_cast&lt;&gt;: verify the correctness at runtime</li>
+</ol></li>
+<li>Incorrect downcasting (via static_cast&lt;&gt;) results in memory violation</li>
+<li>dynamic_cast&lt;&gt; requires RTTI, incurring non-trivial perf. overheads</li>
+</ul>
+</div></section>
+<section class="slide level1" id="cve-2013-0912-and-pwn2own-2013"><div>
+<h1>CVE-2013-0912 and Pwn2Own 2013</h1>
+<p style="text-align:center;margin:0"><img src="img/svg-class-hierarchy.svg" style="width:80%"/></p>
 </div></section>
 <section class="slide level1" id="exercise-real-world-examples"><div>
 <h1>Exercise: Real-world Examples</h1>
 <ul>
-<li>Ex1. Linux Perf (CVE-2009-3234/+)</li>
-<li>Ex2. Linux USB (CVE-2016-4482)</li>
+<li>Ex1. Linux Perf (CVE-2009-3234/+)
+<ul>
+<li>→ Race condition: double fetching in Linux</li>
+</ul></li>
+<li>Ex2. Linux USB (CVE-2016-4482)
+<ul>
+<li>→ Uninitialized read via struct padding</li>
+</ul></li>
 </ul>
 </div></section>
 <section class="slide level1" id="double-fetching-vulnerabilities"><div>
@@ -515,10 +531,10 @@ ret                               [     ]
 </div></section>
 <section class="slide level1" id="fixing-double-fetches"><div>
 <h1>Fixing Double Fetches</h1>
-<ul>
+<ol type="1">
 <li>Partialy reading after the size attribute</li>
 <li>Ensuring the atomicity of previous checked size</li>
-</ul>
+</ol>
 <div class="sourceCode" id="cb21"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb21-1" title="1">  <span class="co">// @f12f42acdbb577a12eecfcebbbec41c81505c4dc</span></a>
 <a class="sourceLine" id="cb21-2" title="2">  ret = get_user(size, &amp;uattr-&gt;size);</a>
 <a class="sourceLine" id="cb21-3" title="3">  ret = copy_from_user(attr, uattr, size);</a>
@@ -559,6 +575,19 @@ ret                               [     ]
 <a class="sourceLine" id="cb23-12" title="12">+   size = <span class="kw">sizeof</span>(*attr);</a>
 <a class="sourceLine" id="cb23-13" title="13">  }</a>
 <a class="sourceLine" id="cb23-14" title="14">  ret = copy_from_user(attr, uattr, size); <span class="co">// Q. size?</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="exercise-real-world-examples-1"><div>
+<h1>Exercise: Real-world Examples</h1>
+<ul>
+<li>Ex1. Linux Perf (CVE-2009-3234/+)
+<ul>
+<li>→ Race condition: double fetching in Linux</li>
+</ul></li>
+<li>Ex2. Linux USB (CVE-2016-4482)
+<ul>
+<li>→ Uninitialized read via struct padding</li>
+</ul></li>
+</ul>
 </div></section>
 <section class="slide level1" id="cve-2016-4482-linux-usb"><div>
 <h1>CVE-2016-4482: Linux USB</h1>
@@ -601,6 +630,9 @@ When a value is stored in an object of structure (…), the bytes of the object 
 </div></section>
 <section class="slide level1" id="cve-2016-4482-patch"><div>
 <h1>CVE-2016-4482: Patch</h1>
+<ul>
+<li>Zero-ing out via memset(): initializing two times!</li>
+</ul>
 <div class="sourceCode" id="cb27"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb27-1" title="1"><span class="dt">static</span> <span class="dt">int</span> proc_connectinfo(<span class="kw">struct</span> usb_dev_state *ps, </a>
 <a class="sourceLine" id="cb27-2" title="2">                            <span class="dt">void</span> __user *arg) {</a>
 <a class="sourceLine" id="cb27-3" title="3">+   <span class="kw">struct</span> usbdevfs_connectinfo ci;</a>
@@ -610,8 +642,28 @@ When a value is stored in an object of structure (…), the bytes of the object 
 <a class="sourceLine" id="cb27-7" title="7">+   ci.slow = ps-&gt;dev-&gt;speed == USB_SPEED_LOW;</a>
 <a class="sourceLine" id="cb27-8" title="8">    ...</a>
 <a class="sourceLine" id="cb27-9" title="9">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="summary"><div>
+<h1>Summary</h1>
 <ul>
-<li><a href="https://cseweb.ucsd.edu/~hovav/dist/rop.pdf">ROP</a></li>
+<li>Modern attacks are using <strong>ROP</strong> to defeat DEP/NX</li>
+<li>Learn three emerging, critical classes of vulnerabilities
+<ul>
+<li><strong>Type confusion</strong>: e.g., bad casting in C++</li>
+<li><strong>Race condition</strong>: e.g., double fetching</li>
+<li><strong>Uninitialized read</strong>: e.g., struct padding issues</li>
+</ul></li>
+</ul>
+</div></section>
+<section class="slide level1" id="references"><div>
+<h1>References</h1>
+<ul>
+<li><a href="https://www.blackhat.com/presentations/bh-usa-08/Shacham/BH_US_08_Shacham_Return_Oriented_Programming.pdf">Return-oriented Programming</a></li>
+<li><a href="https://bugzilla.redhat.com/show_bug.cgi?id=1332932">CVE-2016-4482</a></li>
+<li><a href="https://nvd.nist.gov/vuln/detail/CVE-2013-0912">CVE-2013-0912</a></li>
+<li><a href="https://www.oreilly.com/library/view/a-guide-to/9781597494861/OEBPS/B9781597494861000048a.htm">CVE-2009-3234</a></li>
+<li><a href="https://taesoo.kim/pubs/2016/lu:unisan.pdf">Proactive Kernel Memory Initialization to Eliminate Data Leakages</a></li>
+<li><a href="https://taesoo.kim/pubs/2018/xu:deadline.pdf">Precise and Scalable Detection of Double-Fetch Bugs in OS Kernels</a></li>
 </ul>
 </div></section>
 <div class="progress"><div></div></div>
