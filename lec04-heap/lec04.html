@@ -127,86 +127,634 @@ a.sourceLine::before { text-decoration: none; }
 <section class="slide level1" id="goals-and-lessons"><div>
 <h1>Goals and Lessons</h1>
 <ul>
-<li>Learn about the heap-related vulnerabilities
+<li>Learn about the <strong>heap</strong>-related vulnerabilities
 <ul>
 <li>Buffer overflow/underflow, out-of-bound read</li>
-<li>Use-after-free, including double frees</li>
+<li><strong>Use-after-free</strong>, including double frees</li>
 </ul></li>
 <li>Understand their security implications</li>
-<li>Understand the off-the-shelf mitigation (lec05)</li>
 <li>Learn them from the real-world examples</li>
 </ul>
+</div></section>
+<section class="slide level1" id="trends-of-vulnerability-classes"><div>
+<h1>Trends of Vulnerability Classes</h1>
+<p style="text-align:center;margin:0"><img src="img/trend.png" style="width:110%"/></p>
+<p>Ref. <a href="https://www.rsaconference.com/writable/presentations/file_upload/br-t07-exploitation-trends-from-potential-risk-to-actual-risk.pdf">Exploitation Trends: From Potential Risk to Actual Risk, RSA 2015</a></p>
 </div></section>
 <section class="slide level1" id="classifying-heap-vulnerabilities"><div>
 <h1>Classifying Heap Vulnerabilities</h1>
 <ul>
-<li>Buffer overflow/underflow, out-of-bound read
+<li>Common: buffer overflow/underflow, out-of-bound read
 <ul>
-<li>Much prevalent (i.e., quality, complexity)</li>
-<li>Much critical (i.e., larger attack surface)</li>
+<li><em>Much prevalent</em> (i.e., quality, complexity)</li>
+<li><em>Much critical</em> (i.e., larger attack surface)</li>
 </ul></li>
-<li>Heap-specific issues
+<li>Heap-specific issues:
 <ul>
-<li>Use-after-free (e.g., dangled pointers)</li>
+<li><strong>Use-after-free</strong> (e.g., dangled pointers)</li>
 <li>Incorrect uses (e.g., double frees)</li>
 </ul></li>
 </ul>
 </div></section>
-<section class="slide level1" id="interface"><div>
-<h1>Interface</h1>
-<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"></code></pre></div>
+<section class="slide level1" id="simple-high-level-interfaces"><div>
+<h1>Simple High-level Interfaces</h1>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb1-1" title="1">  <span class="co">// allocate a memory region (an object)</span></a>
+<a class="sourceLine" id="cb1-2" title="2">  <span class="dt">void</span> *malloc(<span class="dt">size_t</span> size);</a>
+<a class="sourceLine" id="cb1-3" title="3">  <span class="co">// free a memory region</span></a>
+<a class="sourceLine" id="cb1-4" title="4">  <span class="dt">void</span> free(<span class="dt">void</span> *ptr);</a>
+<a class="sourceLine" id="cb1-5" title="5"></a>
+<a class="sourceLine" id="cb1-6" title="6">  <span class="co">// allocate a memory region for an array</span></a>
+<a class="sourceLine" id="cb1-7" title="7">  <span class="dt">void</span> *calloc(<span class="dt">size_t</span> nmemb, <span class="dt">size_t</span> size);</a>
+<a class="sourceLine" id="cb1-8" title="8">  <span class="co">// resize/reallocate a memory region</span></a>
+<a class="sourceLine" id="cb1-9" title="9">  <span class="dt">void</span> *realloc(<span class="dt">void</span> *ptr, <span class="dt">size_t</span> size);</a>
+<a class="sourceLine" id="cb1-10" title="10"></a>
+<a class="sourceLine" id="cb1-11" title="11">  <span class="co">// new Type == malloc(sizeof(Type))</span></a>
+<a class="sourceLine" id="cb1-12" title="12">  <span class="co">// new Type[size] == malloc(sizeof(Type)*size)</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cs101-heap-allocators"><div>
+<h1>CS101: Heap Allocators</h1>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb2-1" title="1">Q0. ptr = malloc(size); *ptr?</a>
+<a class="sourceLine" id="cb2-2" title="2">Q1. ptr = malloc(<span class="dv">0</span>); ptr == NULL?</a>
+<a class="sourceLine" id="cb2-3" title="3">Q2. ptr = malloc(-<span class="dv">1</span>); ptr == NULL?</a>
+<a class="sourceLine" id="cb2-4" title="4">Q3. ptr = malloc(size); ptr == NULL but valid? <span class="co">/* vaddr = 0 */</span></a>
+<a class="sourceLine" id="cb2-5" title="5"></a>
+<a class="sourceLine" id="cb2-6" title="6">Q4. free(ptr); ptr == NULL?</a>
+<a class="sourceLine" id="cb2-7" title="7">Q5. free(ptr); *ptr?</a>
+<a class="sourceLine" id="cb2-8" title="8">Q6. free(NULL)?</a>
+<a class="sourceLine" id="cb2-9" title="9"></a>
+<a class="sourceLine" id="cb2-10" title="10">Q7. realloc(ptr, size); ptr valid?</a>
+<a class="sourceLine" id="cb2-11" title="11">Q8. ptr = calloc(nmemb, size); *ptr?</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cs101-common-goals-of-heap-allocators"><div>
+<h1>CS101: Common Goals of Heap Allocators</h1>
+<ol type="1">
+<li>Performance</li>
+<li>Memory fragmentation</li>
+<li>(sometime) Security</li>
+</ol>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb3-1" title="1"><span class="co">// either fast, secure, (external) fragmentation!</span></a>
+<a class="sourceLine" id="cb3-2" title="2"><span class="fl">1.</span> malloc() -&gt; mmap()                       &amp; free() -&gt; unmap()</a>
+<a class="sourceLine" id="cb3-3" title="3"><span class="fl">2.</span> malloc() -&gt; brk()                        &amp; free() -&gt; nop</a>
+<a class="sourceLine" id="cb3-4" title="4"><span class="fl">3.</span> malloc() -&gt; base += size; <span class="cf">return</span> base    &amp; free() -&gt; nop</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="memory-allocators"><div>
+<h1>Memory Allocators</h1>
+<table class="writeup">
+<tr>
+<th>
+Allocators
+</th>
+<th>
+B
+</th>
+<th>
+I
+</th>
+<th>
+C
+</th>
+<th>
+Description (applications)
+</th>
+</tr>
+<tr>
+<td>
+ptmalloc
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+A default allocator in Linux
+</td>
+</tr>
+<tr>
+<td>
+dlmalloc
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+An allocator that ptmalloc is based on
+</td>
+</tr>
+<tr>
+<td>
+jemalloc
+</td>
+<td>
+✓
+</td>
+<td>
+</td>
+<td>
+✓
+</td>
+<td>
+A default allocator in FreeBSD
+</td>
+</tr>
+<tr>
+<td>
+tcmalloc
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+A high-performance allocator from Google
+</td>
+</tr>
+<tr>
+<td>
+PartitionAlloc
+</td>
+<td>
+✓
+</td>
+<td>
+</td>
+<td>
+✓
+</td>
+<td>
+A default allocator in Chromium
+</td>
+</tr>
+<tr>
+<td>
+libumem
+</td>
+<td>
+✓
+</td>
+<td>
+</td>
+<td>
+✓
+</td>
+<td>
+A default allocator in Solaris
+</td>
+</tr>
+</table>
+</div></section>
+<section class="slide level1" id="common-design-choices-security-related"><div>
+<h1>Common Design Choices (Security-Related)</h1>
+<ol type="1">
+<li><strong>B</strong>inning: size-base groups/operations
+<ul>
+<li>e.g., caching the same size objects together</li>
+</ul></li>
+<li><strong>I</strong>n-place metadata: metadata before/after or even inside
+<ul>
+<li>e.g., putting metadata inside the freed region</li>
+</ul></li>
+<li><strong>C</strong>ardinal metadata: no encoding, direct pointers and sizes
+<ul>
+<li>e.g., using raw pointers for linked lists</li>
+</ul></li>
+</ol>
+</div></section>
+<section class="slide level1" id="memory-allocators-1"><div>
+<h1>Memory Allocators</h1>
+<table class="writeup">
+<tr>
+<th>
+Allocators
+</th>
+<th>
+B
+</th>
+<th>
+I
+</th>
+<th>
+C
+</th>
+<th>
+Description (applications)
+</th>
+</tr>
+<tr>
+<td>
+ptmalloc
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+A default allocator in Linux
+</td>
+</tr>
+<tr>
+<td>
+dlmalloc
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+An allocator that ptmalloc is based on
+</td>
+</tr>
+<tr>
+<td>
+jemalloc
+</td>
+<td>
+✓
+</td>
+<td>
+</td>
+<td>
+✓
+</td>
+<td>
+A default allocator in FreeBSD
+</td>
+</tr>
+<tr>
+<td>
+tcmalloc
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+✓
+</td>
+<td>
+A high-performance allocator from Google
+</td>
+</tr>
+<tr>
+<td>
+PartitionAlloc
+</td>
+<td>
+✓
+</td>
+<td>
+</td>
+<td>
+✓
+</td>
+<td>
+A default allocator in Chromium
+</td>
+</tr>
+<tr>
+<td>
+libumem
+</td>
+<td>
+✓
+</td>
+<td>
+</td>
+<td>
+✓
+</td>
+<td>
+A default allocator in Solaris
+</td>
+</tr>
+</table>
+</div></section>
+<section class="slide level1" id="ptmalloc-in-linux-memory-allocation"><div>
+<h1>ptmalloc in Linux: Memory Allocation</h1>
+<div class="sourceCode" id="cb4"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb4-1" title="1">ptr = malloc(size);</a></code></pre></div>
+<p style="text-align:center;margin:0"><img src="img/heap0.svg" style="width:50%"/></p>
+</div></section>
+<section class="slide level1" id="ptmalloc-in-linux-data-structure"><div>
+<h1>ptmalloc in Linux: Data Structure</h1>
+<div class="sourceCode" id="cb5"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb5-1" title="1"><span class="kw">struct</span> malloc_chunk {</a>
+<a class="sourceLine" id="cb5-2" title="2">  <span class="co">// size of "previous" chunk</span></a>
+<a class="sourceLine" id="cb5-3" title="3">  <span class="co">//  (only valid when the previous chunk is freed, P=0)</span></a>
+<a class="sourceLine" id="cb5-4" title="4">  <span class="dt">size_t</span> prev_size;</a>
+<a class="sourceLine" id="cb5-5" title="5">  </a>
+<a class="sourceLine" id="cb5-6" title="6">  <span class="co">// size in bytes (aligned by double words): lower bits</span></a>
+<a class="sourceLine" id="cb5-7" title="7">  <span class="co">// indicate various states of the current/previous chunk</span></a>
+<a class="sourceLine" id="cb5-8" title="8">  <span class="co">//   A: alloced in a non-main arena</span></a>
+<a class="sourceLine" id="cb5-9" title="9">  <span class="co">//   M: mmapped</span></a>
+<a class="sourceLine" id="cb5-10" title="10">  <span class="co">//   P: "previous" in use (i.e., P=0 means freed)</span></a>
+<a class="sourceLine" id="cb5-11" title="11">  <span class="dt">size_t</span> size;</a>
+<a class="sourceLine" id="cb5-12" title="12"></a>
+<a class="sourceLine" id="cb5-13" title="13">  [...]</a>
+<a class="sourceLine" id="cb5-14" title="14">};</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="ptmalloc-in-linux-memory-allocation-1"><div>
+<h1>ptmalloc in Linux: Memory Allocation</h1>
+<p style="text-align:center;margin:0"><img src="img/heap1.svg" style="width:60%"/></p>
+</div></section>
+<section class="slide level1" id="remarks-memory-allocation"><div>
+<h1>Remarks: Memory Allocation</h1>
+<ul>
+<li>Given a alloced ptr,
+<ol type="1">
+<li>Immediately lookup its size!</li>
+<li>Check if the previous object is alloced/freed (P = 0 or 1)</li>
+<li>Iterate to the next object (not previous object if alloced)</li>
+<li>Check if the next object is alloced/freed (the next, next one’s P)</li>
+</ol></li>
+</ul>
+</div></section>
+<section class="slide level1" id="ptmalloc-in-linux-data-structure-1"><div>
+<h1>ptmalloc in Linux: Data Structure</h1>
+<div class="sourceCode" id="cb6"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb6-1" title="1"><span class="kw">struct</span> malloc_chunk {</a>
+<a class="sourceLine" id="cb6-2" title="2">  [...]</a>
+<a class="sourceLine" id="cb6-3" title="3">  <span class="co">// double links for free chunks in small/large bins</span></a>
+<a class="sourceLine" id="cb6-4" title="4">  <span class="co">//  (only valid when this chunk is freed)</span></a>
+<a class="sourceLine" id="cb6-5" title="5">  <span class="kw">struct</span> malloc_chunk* fd;</a>
+<a class="sourceLine" id="cb6-6" title="6">  <span class="kw">struct</span> malloc_chunk* bk;</a>
+<a class="sourceLine" id="cb6-7" title="7">  </a>
+<a class="sourceLine" id="cb6-8" title="8">  <span class="co">// double links for next larger/smaller size in largebins</span></a>
+<a class="sourceLine" id="cb6-9" title="9">  <span class="co">//  (only valid when this chunk is freed)</span></a>
+<a class="sourceLine" id="cb6-10" title="10">  <span class="kw">struct</span> malloc_chunk* fd_nextsize;</a>
+<a class="sourceLine" id="cb6-11" title="11">  <span class="kw">struct</span> malloc_chunk* bk_nextsize;</a>
+<a class="sourceLine" id="cb6-12" title="12">};</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="ptmalloc-in-linux-memory-free"><div>
+<h1>ptmalloc in Linux: Memory Free</h1>
+<p style="text-align:center;margin:0"><img src="img/heap2.svg" style="width:60%"/></p>
+</div></section>
+<section class="slide level1" id="remarks-memory-free"><div>
+<h1>Remarks: Memory Free</h1>
+<ul>
+<li>Given a free-ed ptr,
+<ol type="1">
+<li>All benefits as an alloced ptr (previous remarks)</li>
+<li>Iterate to previous/next free objects via fd/bk links</li>
+</ol></li>
+<li>Invariant: <strong>no two adjacent</strong> free objects (P = 0)
+<ol type="1">
+<li>When free(), check if previous/next objects are free and consolidate!</li>
+</ol></li>
+</ul>
 </div></section>
 <section class="slide level1" id="understanding-modern-heap-allocators"><div>
 <h1>Understanding Modern Heap Allocators</h1>
-<p style="text-align:center;margin:0"><img src="img/heap.svg" style="width:150%"/></p>
-</div></section>
-<section class="slide level1" id="exercises-real-world-examples"><div>
-<h1>Exercises: Real-world Examples</h1>
 <ul>
-<li>CVE-2014-0160: OpenSSL</li>
-<li>CVE-2018-11360: Wireshark</li>
-<li>CVE-2016-0728: Linux vmacache (refcnt)</li>
+<li>Maximize memory usage: using free memory regions!</li>
+<li>Data structure to minimize fragmentation (i.e., fd/bk consolidation)</li>
+<li>Data structure to maximize performance (i.e., O(1) in free/malloc)</li>
 </ul>
+<p style="text-align:center;margin:0"><img src="img/heap.svg" style="width:70%"/></p>
 </div></section>
-<section class="slide level1" id="example-of-use-after-free"><div>
-<h1>Example of Use-after-free</h1>
+<section class="slide level1" id="security-implication-of-heap-overflows"><div>
+<h1>Security Implication of Heap Overflows</h1>
+<ul>
+<li>All metadata can be easily modified/crafted!</li>
+<li>Or even new alloc/free objects are created for benefits (and fun!)</li>
+</ul>
+<div class="sourceCode" id="cb7"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb7-1" title="1">  <span class="dt">void</span> *p1 = malloc(sz);</a>
+<a class="sourceLine" id="cb7-2" title="2">  <span class="dt">void</span> *p2 = malloc(sz);</a>
+<a class="sourceLine" id="cb7-3" title="3"></a>
+<a class="sourceLine" id="cb7-4" title="4">  <span class="co">/* overflow on p1 */</span></a>
+<a class="sourceLine" id="cb7-5" title="5"></a>
+<a class="sourceLine" id="cb7-6" title="6">  free(p1);</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="example-unsafe-unlink-glibc-2.3.3"><div>
+<h1>Example: Unsafe Unlink (&lt; glibc 2.3.3)</h1>
+<ol type="1">
+<li>Overwriting to p2’s size to -sizeof(void*), treating now as if p2 is free</li>
+<li>When free(p1), attempt to consolidate it with p2 as p2 is free</li>
+</ol>
+<p style="text-align:center;margin:0"><img src="img/heap-unlink.svg" style="width:110%"/></p>
+</div></section>
+<section class="slide level1" id="example-unsafe-unlink-glibc-2.3.3-1"><div>
+<h1>Example: Unsafe Unlink (&lt; glibc 2.3.3)</h1>
+<ul>
+<li>To consolidate, perform unlike on p2 (removing p2 from the linked list)</li>
+<li>Crafted fd/bk when unlink() result in an arbitrary write!</li>
+</ul>
+<div class="sourceCode" id="cb8"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb8-1" title="1">    p2's fd = dst - offsetof(<span class="kw">struct</span> malloc_chunk, bk);</a>
+<a class="sourceLine" id="cb8-2" title="2">    p2's bk = val;</a>
+<a class="sourceLine" id="cb8-3" title="3"></a>
+<a class="sourceLine" id="cb8-4" title="4">    -&gt; *dst = val (arbitrary write!)</a>
+<a class="sourceLine" id="cb8-5" title="5"></a>
+<a class="sourceLine" id="cb8-6" title="6"><span class="pp">#define unlink(P, BK, FD)</span></a>
+<a class="sourceLine" id="cb8-7" title="7">  FD = P-&gt;fd;</a>
+<a class="sourceLine" id="cb8-8" title="8">  BK = P-&gt;bk;</a>
+<a class="sourceLine" id="cb8-9" title="9">  FD-&gt;bk = BK;</a>
+<a class="sourceLine" id="cb8-10" title="10">  BK-&gt;fd = FD;</a>
+<a class="sourceLine" id="cb8-11" title="11">  ...</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="example-mitigation-on-unlink-glibc-2.27"><div>
+<h1>Example: Mitigation on Unlink (glibc 2.27)</h1>
+<div class="sourceCode" id="cb9"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb9-1" title="1"><span class="pp">#define unlink(AV, P, BK, FD)</span></a>
+<a class="sourceLine" id="cb9-2" title="2">    <span class="co">/* (1) checking if size == the next chunk's prev_size */</span></a>
+<a class="sourceLine" id="cb9-3" title="3">*   <span class="cf">if</span> (chunksize(P) != prev_size(next_chunk(P)))</a>
+<a class="sourceLine" id="cb9-4" title="4">*     malloc_printerr(<span class="st">"corrupted size vs. prev_size"</span>);</a>
+<a class="sourceLine" id="cb9-5" title="5">    FD = P-&gt;fd;</a>
+<a class="sourceLine" id="cb9-6" title="6">    BK = P-&gt;bk;</a>
+<a class="sourceLine" id="cb9-7" title="7">    <span class="co">/* (2) checking if prev/next chunks correctly point to me */</span></a>
+<a class="sourceLine" id="cb9-8" title="8">*   <span class="cf">if</span> (FD-&gt;bk != P || BK-&gt;fd != P)</a>
+<a class="sourceLine" id="cb9-9" title="9">*     malloc_printerr(<span class="st">"corrupted double-linked list"</span>);</a>
+<a class="sourceLine" id="cb9-10" title="10">*   <span class="cf">else</span> {</a>
+<a class="sourceLine" id="cb9-11" title="11">      FD-&gt;bk = BK;</a>
+<a class="sourceLine" id="cb9-12" title="12">      BK-&gt;fd = FD;</a>
+<a class="sourceLine" id="cb9-13" title="13">      ...</a>
+<a class="sourceLine" id="cb9-14" title="14">*    }</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="heap-exploitation-techniques"><div>
+<h1>Heap Exploitation Techniques!</h1>
+<pre><code>Fast bin dup                    House of einherjar
+Fast bin dup into stack         House of orange
+Fast bin dup consolidate        Tcache dup 
+Unsafe unlink                   Tcache house of spirit
+House of spirit                 Tcache poisoning
+Poison null byte                Tcache overlapping chunks
+House of lore                  *Unsorted bin into stack
+Overlapping chunks 1           *Fast bin into other bin
+Overlapping chunks 2           *Overlapping small chunks
+House of force                 *Unaligned double free
+Unsorted bin attack            *House of unsorted einherjar</code></pre>
+<p>NOTE. * are what our group recently found and reported!</p>
+</div></section>
+<section class="slide level1" id="use-after-free"><div>
+<h1>Use-after-free</h1>
+<ul>
+<li>Simple in concept, but difficult to spot in practice!</li>
+<li>Why is it so critical in terms of security?</li>
+</ul>
+<div class="sourceCode" id="cb11"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb11-1" title="1"><span class="dt">int</span> *ptr = malloc(size);</a>
+<a class="sourceLine" id="cb11-2" title="2">free(ptr);</a>
+<a class="sourceLine" id="cb11-3" title="3"></a>
+<a class="sourceLine" id="cb11-4" title="4">*ptr; <span class="co">// </span><span class="al">BUG</span><span class="co">. use-after-free!</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="use-after-free-1"><div>
+<h1>Use-after-free</h1>
+<ol type="1">
+<li>What would be the *ptr? if nothing happened?</li>
+<li>What if another part of code invoked malloc(size)?</li>
+</ol>
+<div class="sourceCode" id="cb12"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb12-1" title="1"><span class="dt">int</span> *ptr = malloc(size);</a>
+<a class="sourceLine" id="cb12-2" title="2">free(ptr);</a>
+<a class="sourceLine" id="cb12-3" title="3"></a>
+<a class="sourceLine" id="cb12-4" title="4">*ptr; <span class="co">// </span><span class="al">BUG</span><span class="co">. use-after-free!</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="use-after-free-security-implication"><div>
+<h1>Use-after-free: Security Implication</h1>
+<ol type="1">
+<li>What would be the *ptr? if nothing happened?
+<ul>
+<li>→ Heap pointer leakage (e.g., fd/bk)</li>
+</ul></li>
+<li>What if another part of code invoked malloc(size)?
+<ul>
+<li>→ Hijacking function pointers (e.g., handler)</li>
+</ul></li>
+</ol>
+<div class="sourceCode" id="cb13"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb13-1" title="1"><span class="kw">struct</span> msg { <span class="dt">void</span> (*handler)(); };</a>
+<a class="sourceLine" id="cb13-2" title="2"></a>
+<a class="sourceLine" id="cb13-3" title="3"><span class="kw">struct</span> msg *ptr = malloc(size);</a>
+<a class="sourceLine" id="cb13-4" title="4">free(ptr);</a>
+<a class="sourceLine" id="cb13-5" title="5"><span class="co">// ...?</span></a>
+<a class="sourceLine" id="cb13-6" title="6">ptr-&gt;handler(); <span class="co">// </span><span class="al">BUG</span><span class="co">. use-after-free!</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="use-after-free-with-application-context"><div>
+<h1>Use-after-free with Application Context</h1>
 <p style="text-align:center;margin:0"><img src="img/ex0.svg" style="width:40%"/></p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb2-1" title="1"><span class="kw">class</span> Div: Element;</a>
-<a class="sourceLine" id="cb2-2" title="2"><span class="kw">class</span> Body: Element;</a>
-<a class="sourceLine" id="cb2-3" title="3"><span class="kw">class</span> Document { Element* child; };</a></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb14-1" title="1"><span class="kw">class</span> Div: Element;</a>
+<a class="sourceLine" id="cb14-2" title="2"><span class="kw">class</span> Body: Element;</a>
+<a class="sourceLine" id="cb14-3" title="3"><span class="kw">class</span> Document { Element* child; };</a></code></pre></div>
 </div></section>
-<section class="slide level1" id="example-of-use-after-free-1"><div>
-<h1>Example of Use-after-free</h1>
+<section class="slide level1" id="use-after-free-with-application-context-1"><div>
+<h1>Use-after-free with Application Context</h1>
 <p style="text-align:center;margin:0"><img src="img/ex1.svg" style="width:60%"/></p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb3-1" title="1"><span class="kw">class</span> Div: Element;</a>
-<a class="sourceLine" id="cb3-2" title="2"><span class="kw">class</span> Body: Element;</a>
-<a class="sourceLine" id="cb3-3" title="3"><span class="kw">class</span> Document { Element* child; };</a>
-<a class="sourceLine" id="cb3-4" title="4"></a>
-<a class="sourceLine" id="cb3-5" title="5"><span class="co">// (a) memory allocations</span></a>
-<a class="sourceLine" id="cb3-6" title="6">Document *doc = <span class="kw">new</span> Document();</a>
-<a class="sourceLine" id="cb3-7" title="7">Body *body = <span class="kw">new</span> Body();</a>
-<a class="sourceLine" id="cb3-8" title="8">Div *div = <span class="kw">new</span> Div();</a></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb15-1" title="1"><span class="kw">class</span> Div: Element;</a>
+<a class="sourceLine" id="cb15-2" title="2"><span class="kw">class</span> Body: Element;</a>
+<a class="sourceLine" id="cb15-3" title="3"><span class="kw">class</span> Document { Element* child; };</a>
+<a class="sourceLine" id="cb15-4" title="4"></a>
+<a class="sourceLine" id="cb15-5" title="5"><span class="co">// (a) memory allocations</span></a>
+<a class="sourceLine" id="cb15-6" title="6">Document *doc = <span class="kw">new</span> Document();</a>
+<a class="sourceLine" id="cb15-7" title="7">Body *body = <span class="kw">new</span> Body();</a>
+<a class="sourceLine" id="cb15-8" title="8">Div *div = <span class="kw">new</span> Div();</a></code></pre></div>
 </div></section>
-<section class="slide level1" id="example-of-use-after-free-2"><div>
-<h1>Example of Use-after-free</h1>
+<section class="slide level1" id="dangled-pointers-and-use-after-free"><div>
+<h1>Dangled Pointers and Use-after-free</h1>
 <p style="text-align:center;margin:0"><img src="img/ex2.svg" style="width:60%"/></p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb4-1" title="1"><span class="co">// (b) using memory: propagating pointers</span></a>
-<a class="sourceLine" id="cb4-2" title="2">doc-&gt;child = body;</a>
-<a class="sourceLine" id="cb4-3" title="3">body-&gt;child = div;</a>
-<a class="sourceLine" id="cb4-4" title="4"></a>
-<a class="sourceLine" id="cb4-5" title="5"><span class="co">// (c) memory free: doc-&gt;child is now dangled</span></a>
-<a class="sourceLine" id="cb4-6" title="6"><span class="kw">delete</span> body;</a>
-<a class="sourceLine" id="cb4-7" title="7"></a>
-<a class="sourceLine" id="cb4-8" title="8"><span class="co">// (d) use-after-free: dereference the dangled pointer</span></a>
-<a class="sourceLine" id="cb4-9" title="9"><span class="cf">if</span> (doc-&gt;child)</a>
-<a class="sourceLine" id="cb4-10" title="10">    doc-&gt;child-&gt;getAlign();</a></code></pre></div>
+<div class="sourceCode" id="cb16"><pre class="sourceCode numberSource cc numberLines"><code class="sourceCode cpp"><a class="sourceLine" id="cb16-1" title="1"><span class="co">// (b) using memory: propagating pointers</span></a>
+<a class="sourceLine" id="cb16-2" title="2">doc-&gt;child = body;</a>
+<a class="sourceLine" id="cb16-3" title="3">body-&gt;child = div;</a>
+<a class="sourceLine" id="cb16-4" title="4"></a>
+<a class="sourceLine" id="cb16-5" title="5"><span class="co">// (c) memory free: doc-&gt;child is now dangled</span></a>
+<a class="sourceLine" id="cb16-6" title="6"><span class="kw">delete</span> body;</a>
+<a class="sourceLine" id="cb16-7" title="7"></a>
+<a class="sourceLine" id="cb16-8" title="8"><span class="co">// (d) use-after-free: dereference the dangled pointer</span></a>
+<a class="sourceLine" id="cb16-9" title="9"><span class="cf">if</span> (doc-&gt;child)</a>
+<a class="sourceLine" id="cb16-10" title="10">    doc-&gt;child-&gt;getAlign();</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="double-free"><div>
+<h1>Double Free</h1>
+<ol type="1">
+<li>What happen when free two times?</li>
+<li>What happen for following malloc()s?</li>
+</ol>
+<div class="sourceCode" id="cb17"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb17-1" title="1"><span class="dt">char</span> *ptr = malloc(size);</a>
+<a class="sourceLine" id="cb17-2" title="2">free(ptr);</a>
+<a class="sourceLine" id="cb17-3" title="3">free(ptr); <span class="co">// </span><span class="al">BUG</span><span class="co">!</span></a></code></pre></div>
+</div></section>
+<section class="slide level1" id="binning-and-security-implication"><div>
+<h1>Binning and Security Implication</h1>
+<ul>
+<li>e.g., size-based caching (e.g., fastbin)</li>
+</ul>
+<pre><code>    (fastbin)
+      Bins
+sz=16 [ -]---&gt;[fd]---&gt;[fd]--&gt;NULL
+sz=24 [ -]---&gt;[fd]---&gt;NULL
+sz=32 [ -]---&gt;NULL
+       ...</code></pre>
+</div></section>
+<section class="slide level1" id="double-free-1"><div>
+<h1>Double Free</h1>
+<ul>
+<li>Bins after doing free() two times</li>
+</ul>
+<div class="sourceCode" id="cb19"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb19-1" title="1"><span class="dt">char</span> *ptr = malloc(sz=<span class="dv">16</span>);</a>
+<a class="sourceLine" id="cb19-2" title="2">free(ptr);</a>
+<a class="sourceLine" id="cb19-3" title="3">free(ptr); <span class="co">// </span><span class="al">BUG</span><span class="co">!</span></a></code></pre></div>
+<pre><code>
+    (fastbin)
+      Bins  ptr      ptr
+sz=16 [ -]---&gt;[XX]---&gt;[XX]---&gt;[fd]---&gt;[fd]--&gt;NULL
+sz=24 [ -]---&gt;[fd]---&gt;NULL
+sz=32 [ -]---&gt;NULL
+       ...</code></pre>
+</div></section>
+<section class="slide level1" id="double-free-security-implication"><div>
+<h1>Double Free: Security Implication</h1>
+<div class="sourceCode" id="cb21"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb21-1" title="1"><span class="dt">char</span> *ptr = malloc(sz=<span class="dv">16</span>);</a>
+<a class="sourceLine" id="cb21-2" title="2">free(ptr);</a>
+<a class="sourceLine" id="cb21-3" title="3">free(ptr); <span class="co">// </span><span class="al">BUG</span><span class="co">!</span></a>
+<a class="sourceLine" id="cb21-4" title="4"></a>
+<a class="sourceLine" id="cb21-5" title="5">ptr1 = malloc(sz=<span class="dv">16</span>) <span class="co">// hijacked!</span></a>
+<a class="sourceLine" id="cb21-6" title="6">ptr2 = malloc(sz=<span class="dv">16</span>) <span class="co">// hijacked!</span></a></code></pre></div>
+<pre><code>    (fastbin)
+      Bins
+            +--------------+
+            |              |
+sz=16 [ -]--+ [XX]---&gt;[XX] +--&gt;[fd]---&gt;[fd]--&gt;NULL
+sz=24 [ -]---&gt;[fd]---&gt;NULL
+sz=32 [ -]---&gt;NULL
+       ...</code></pre>
+</div></section>
+<section class="slide level1" id="double-free-mitigation"><div>
+<h1>Double Free: Mitigation</h1>
+<ul>
+<li>Check if the bin contains the pointer that we’d like to free()</li>
+</ul>
+<div class="sourceCode" id="cb23"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb23-1" title="1"><span class="co">// @glibc/malloc/malloc.c</span></a>
+<a class="sourceLine" id="cb23-2" title="2"></a>
+<a class="sourceLine" id="cb23-3" title="3">    <span class="co">/* Check that the top of the bin is not the record we are going to</span></a>
+<a class="sourceLine" id="cb23-4" title="4"><span class="co">       add (i.e., double free).  */</span></a>
+<a class="sourceLine" id="cb23-5" title="5">    <span class="cf">if</span> (__builtin_expect (old == p, <span class="dv">0</span>))</a>
+<a class="sourceLine" id="cb23-6" title="6">      malloc_printerr (<span class="st">"double free or corruption (fasttop)"</span>);</a>
+<a class="sourceLine" id="cb23-7" title="7">    ...</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="exercise-real-world-examples"><div>
 <h1>Exercise: Real-world Examples</h1>
 <ul>
 <li>Ex1. OpenSSL (CVE-2014-0160)</li>
 <li>Ex2. Wireshark (CVE-2018-11360)</li>
-<li>Ex3. Linux vmcache (CVE-2018-17182)</li>
+<li>Ex3. Linux vmcache (CVE-2018-17182)*</li>
 </ul>
 </div></section>
 <section class="slide level1" id="cve-2014-0160-openssl-heartbleed"><div>
@@ -226,58 +774,82 @@ a.sourceLine::before { text-decoration: none; }
 -&gt; req: [REQ][len'][payload ....    ]
 &lt;- res: [RES][len'][payload ....    ][padding]
 
-  len' != len''
-  what if len' &gt;&gt; len''?</code></pre>
+  len' == len''?
+  what if len' &lt; len''?
+  what if len' &gt; len''?</code></pre>
 </div></section>
 <section class="slide level1" id="cve-2014-0160-openssl-heartbleed-2"><div>
 <h1>CVE-2014-0160: OpenSSL, Heartbleed</h1>
-<div class="sourceCode" id="cb6"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb6-1" title="1">  <span class="co">/* Read type and payload length first */</span></a>
-<a class="sourceLine" id="cb6-2" title="2">  hbtype = *p++;</a>
-<a class="sourceLine" id="cb6-3" title="3">  n2s(p, payload);</a>
-<a class="sourceLine" id="cb6-4" title="4">  pl = p;</a>
-<a class="sourceLine" id="cb6-5" title="5"></a>
-<a class="sourceLine" id="cb6-6" title="6">  <span class="cf">if</span> (hbtype == TLS1_HB_REQUEST) {</a>
-<a class="sourceLine" id="cb6-7" title="7">    bp = OPENSSL_malloc(<span class="dv">1</span> + <span class="dv">2</span> + payload + padding);</a>
-<a class="sourceLine" id="cb6-8" title="8"></a>
-<a class="sourceLine" id="cb6-9" title="9">    <span class="co">/* Enter response type, length and copy payload */</span></a>
-<a class="sourceLine" id="cb6-10" title="10">    *bp++ = TLS1_HB_RESPONSE;</a>
-<a class="sourceLine" id="cb6-11" title="11">    s2n(payload, bp);</a>
-<a class="sourceLine" id="cb6-12" title="12">    memcpy(bp, pl, payload);</a></code></pre></div>
+<div class="sourceCode" id="cb25"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb25-1" title="1">  <span class="co">/* Read type and payload length first */</span></a>
+<a class="sourceLine" id="cb25-2" title="2">  hbtype = *p++;</a>
+<a class="sourceLine" id="cb25-3" title="3">  n2s(p, payload);</a>
+<a class="sourceLine" id="cb25-4" title="4">  pl = p;</a>
+<a class="sourceLine" id="cb25-5" title="5"></a>
+<a class="sourceLine" id="cb25-6" title="6">  <span class="cf">if</span> (hbtype == TLS1_HB_REQUEST) {</a>
+<a class="sourceLine" id="cb25-7" title="7">    bp = OPENSSL_malloc(<span class="dv">1</span> + <span class="dv">2</span> + payload + padding);</a>
+<a class="sourceLine" id="cb25-8" title="8"></a>
+<a class="sourceLine" id="cb25-9" title="9">    <span class="co">/* Enter response type, length and copy payload */</span></a>
+<a class="sourceLine" id="cb25-10" title="10">    *bp++ = TLS1_HB_RESPONSE;</a>
+<a class="sourceLine" id="cb25-11" title="11">    s2n(payload, bp);</a>
+<a class="sourceLine" id="cb25-12" title="12">    memcpy(bp, pl, payload);</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="cve-2014-0160-openssl-heartbleed-3"><div>
 <h1>CVE-2014-0160: OpenSSL, Heartbleed</h1>
-<div class="sourceCode" id="cb7"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb7-1" title="1">   <span class="dt">unsigned</span> <span class="dt">int</span> payload;</a>
-<a class="sourceLine" id="cb7-2" title="2">   ...</a>
-<a class="sourceLine" id="cb7-3" title="3">+  <span class="co">/* Read type and payload length first */</span></a>
-<a class="sourceLine" id="cb7-4" title="4">+  <span class="cf">if</span> (<span class="dv">1</span> + <span class="dv">2</span> + <span class="dv">16</span> &gt; s-&gt;s3-&gt;rrec.length)</a>
-<a class="sourceLine" id="cb7-5" title="5">+    <span class="cf">return</span> <span class="dv">0</span>; <span class="co">/* silently discard */</span></a>
-<a class="sourceLine" id="cb7-6" title="6">+</a>
-<a class="sourceLine" id="cb7-7" title="7">+  hbtype = *p++;</a>
-<a class="sourceLine" id="cb7-8" title="8">+  n2s(p, payload);</a>
-<a class="sourceLine" id="cb7-9" title="9">+  <span class="cf">if</span> (<span class="dv">1</span> + <span class="dv">2</span> + payload + <span class="dv">16</span> &gt; s-&gt;s3-&gt;rrec.length) <span class="co">// </span><span class="al">BUG</span><span class="co">?</span></a>
-<a class="sourceLine" id="cb7-10" title="10">+    <span class="cf">return</span> <span class="dv">0</span>; <span class="co">/* silently discard per RFC 6520 sec. 4 */</span></a>
-<a class="sourceLine" id="cb7-11" title="11">+  pl = p;</a>
-<a class="sourceLine" id="cb7-12" title="12">+</a>
-<a class="sourceLine" id="cb7-13" title="13">   <span class="cf">if</span> (hbtype == TLS1_HB_REQUEST) { ... }</a></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb26-1" title="1">   <span class="dt">unsigned</span> <span class="dt">int</span> payload;</a>
+<a class="sourceLine" id="cb26-2" title="2">   ...</a>
+<a class="sourceLine" id="cb26-3" title="3">+  <span class="co">/* Read type and payload length first */</span></a>
+<a class="sourceLine" id="cb26-4" title="4">+  <span class="cf">if</span> (<span class="dv">1</span> + <span class="dv">2</span> + <span class="dv">16</span> &gt; s-&gt;s3-&gt;rrec.length)</a>
+<a class="sourceLine" id="cb26-5" title="5">+    <span class="cf">return</span> <span class="dv">0</span>; <span class="co">/* silently discard */</span></a>
+<a class="sourceLine" id="cb26-6" title="6">+</a>
+<a class="sourceLine" id="cb26-7" title="7">+  hbtype = *p++;</a>
+<a class="sourceLine" id="cb26-8" title="8">+  n2s(p, payload);</a>
+<a class="sourceLine" id="cb26-9" title="9">+  <span class="co">// </span><span class="al">NOTE</span><span class="co">. int overflow?</span></a>
+<a class="sourceLine" id="cb26-10" title="10">+  <span class="cf">if</span> (<span class="dv">1</span> + <span class="dv">2</span> + payload + <span class="dv">16</span> &gt; s-&gt;s3-&gt;rrec.length)</a>
+<a class="sourceLine" id="cb26-11" title="11">+    <span class="cf">return</span> <span class="dv">0</span>; <span class="co">/* silently discard per RFC 6520 sec. 4 */</span></a>
+<a class="sourceLine" id="cb26-12" title="12">+  pl = p;</a>
+<a class="sourceLine" id="cb26-13" title="13">+</a>
+<a class="sourceLine" id="cb26-14" title="14">   <span class="cf">if</span> (hbtype == TLS1_HB_REQUEST) { ... }</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="cve-2018-11360-wireshark"><div>
 <h1>CVE-2018-11360: Wireshark</h1>
-<div class="sourceCode" id="cb8"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb8-1" title="1"><span class="dt">void</span> IA5_7BIT_decode(<span class="dt">unsigned</span> <span class="dt">char</span> *dest, </a>
-<a class="sourceLine" id="cb8-2" title="2">                     <span class="dt">const</span> <span class="dt">unsigned</span> <span class="dt">char</span> *src, <span class="dt">int</span> len) {</a>
-<a class="sourceLine" id="cb8-3" title="3">  <span class="dt">int</span> i, j;</a>
-<a class="sourceLine" id="cb8-4" title="4">  gunichar buf;</a>
-<a class="sourceLine" id="cb8-5" title="5"></a>
-<a class="sourceLine" id="cb8-6" title="6">  <span class="cf">for</span> (i = <span class="dv">0</span>, j = <span class="dv">0</span>; j &lt; len;  j++) {</a>
-<a class="sourceLine" id="cb8-7" title="7">    buf = char_def_ia5_alphabet_decode(src[j]);</a>
-<a class="sourceLine" id="cb8-8" title="8">    i += g_unichar_to_utf8(buf,&amp;(dest[i]));</a>
-<a class="sourceLine" id="cb8-9" title="9">  }</a>
-<a class="sourceLine" id="cb8-10" title="10">  dest[i]=<span class="dv">0</span>;</a>
-<a class="sourceLine" id="cb8-11" title="11">  <span class="cf">return</span>;</a>
-<a class="sourceLine" id="cb8-12" title="12">}</a></code></pre></div>
+<div class="sourceCode" id="cb27"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb27-1" title="1"><span class="co">// </span><span class="al">NOTE</span><span class="co">. What's the semantics of data/len?</span></a>
+<a class="sourceLine" id="cb27-2" title="2"><span class="dt">void</span> IA5_7BIT_decode(<span class="dt">unsigned</span> <span class="dt">char</span> *dest, </a>
+<a class="sourceLine" id="cb27-3" title="3">                     <span class="dt">const</span> <span class="dt">unsigned</span> <span class="dt">char</span> *src, <span class="dt">int</span> len) {</a>
+<a class="sourceLine" id="cb27-4" title="4">  <span class="dt">int</span> i, j;</a>
+<a class="sourceLine" id="cb27-5" title="5">  gunichar buf;</a>
+<a class="sourceLine" id="cb27-6" title="6"></a>
+<a class="sourceLine" id="cb27-7" title="7">  <span class="cf">for</span> (i = <span class="dv">0</span>, j = <span class="dv">0</span>; j &lt; len;  j++) {</a>
+<a class="sourceLine" id="cb27-8" title="8">    buf = char_def_ia5_alphabet_decode(src[j]);</a>
+<a class="sourceLine" id="cb27-9" title="9">    i += g_unichar_to_utf8(buf,&amp;(dest[i]));</a>
+<a class="sourceLine" id="cb27-10" title="10">  }</a>
+<a class="sourceLine" id="cb27-11" title="11">  dest[i]=<span class="dv">0</span>;</a>
+<a class="sourceLine" id="cb27-12" title="12">  <span class="cf">return</span>;</a>
+<a class="sourceLine" id="cb27-13" title="13">}</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2018-17182-linux-vmcache"><div>
+<h1>CVE-2018-17182: Linux vmcache*</h1>
+<ul>
+<li>An optimization path for the single thread</li>
+<li>mm→vmcache_seqnum wraps around by another thread
+<ul>
+<li>→ Dangled pointers suddenly become valid!</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb28"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb28-1" title="1"><span class="dt">void</span> vmacache_flush_all(<span class="kw">struct</span> mm_struct *mm) {</a>
+<a class="sourceLine" id="cb28-2" title="2">  <span class="co">/* Single threaded tasks need not iterate the entire list of</span></a>
+<a class="sourceLine" id="cb28-3" title="3"><span class="co">   * process. We can avoid the flushing as well since the mm's seqnum</span></a>
+<a class="sourceLine" id="cb28-4" title="4"><span class="co">   * was increased and don't have to worry about other threads'</span></a>
+<a class="sourceLine" id="cb28-5" title="5"><span class="co">   * seqnum. Current's flush will occur upon the next lookup. */</span></a>
+<a class="sourceLine" id="cb28-6" title="6">  <span class="cf">if</span> (atomic_read(&amp;mm-&gt;mm_users) == <span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb28-7" title="7">    <span class="cf">return</span>;</a>
+<a class="sourceLine" id="cb28-8" title="8">  ...</a>
+<a class="sourceLine" id="cb28-9" title="9">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="references"><div>
 <h1>References</h1>
 <ul>
+<li><a href="https://git.openssl.org/gitweb/?p=openssl.git;a=commit;h=96db9023b881d7cd9f379b0c154650d6c108e9a3">CVE-2014-0160</a></li>
+<li><a href="https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blobdiff;f=epan/dissectors/packet-gsm_a_dtap.c;h=ae6adb2ae6c7ddae56b8d6faa4325eb1893bfbb1;hp=3d5397a139b8ab4c8e7ee5da76cebd9cc4a4344b;hb=a55b36c51f83a7b9680824e8ee3a6ce8429ab24b;hpb=ab8a33ef083b9732c89117747a83a905a676faf6">CVE-2018-11360</a></li>
 <li><a href="https://googleprojectzero.blogspot.com/2018/09/a-cache-invalidation-bug-in-linux.html">CVE-2018-17182</a></li>
 <li><a href="http://phrack.org/issues/57/8.html">Vudo - An object superstitiously believed to embody magical powers</a></li>
 </ul>

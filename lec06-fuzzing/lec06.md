@@ -129,9 +129,8 @@ Ref. <http://lcamtuf.coredump.cx/afl/>
     - Tut2: Fuzzing with LibFuzzer
 
 ~~~~{.sh}
-$ wget https://www.dropbox.com/s/7nlsvkg68l70ez8/nutanix.tar.xz
 # or use: https://tc.gts3.org/public/tmp/1180f-nutanix.tar.xz
-
+$ wget https://www.dropbox.com/s/7nlsvkg68l70ez8/nutanix.tar.xz
 $ unxz fuzzing.tar.xz
 $ docker load -i fuzzing.tar
 $ docker run --privileged -it fuzzing /bin/bash

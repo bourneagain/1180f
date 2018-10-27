@@ -148,9 +148,13 @@ def img_binding(_, opt):
     if opt == "fit":
         style = "width: 100%"
         if os.path.exists(pn):
-            im = Image.open(pn)
-            (w, h) = im.size
-            im.close()
+            try:
+                im = Image.open(pn)
+                (w, h) = im.size
+                im.close()
+            except:
+                w = 1
+                h = 1
             if 0.8 <= w/h <= 1.6:
                 style = "width: 80%"
             elif w/h < 0.8:
