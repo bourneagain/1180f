@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Lec00: Security Vulnerabilities and Their Mitigation in Native Code</title>
+<meta charset="utf-8"/>
+<meta content="ie=edge" http-equiv="x-ua-compatible"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<link href="../shower/styles/ribbon.css" rel="stylesheet"/>
+<style type="text/css">
+a.sourceLine { display: inline-block; line-height: 1.25; }
+a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+a.sourceLine:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode { white-space: pre; position: relative; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+code.sourceCode { white-space: pre-wrap; }
+a.sourceLine { text-indent: -1em; padding-left: 1em; }
+}
+pre.numberSource a.sourceLine
+{ position: relative; left: -4em; }
+pre.numberSource a.sourceLine::before
+{ content: attr(title);
+  position: relative; left: -1em; text-align: right; vertical-align: baseline;
+  border: none; pointer-events: all; display: inline-block;
+  -webkit-touch-callout: none; -webkit-user-select: none;
+  -khtml-user-select: none; -moz-user-select: none;
+  -ms-user-select: none; user-select: none;
+  padding: 0 4px; width: 4em;
+  color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+{  }
+@media screen {
+a.sourceLine::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+<style>
+section pre code {
+  line-height: 1.4 !important;
+  font-size: 20px !important;
+}
+.compact code {
+  line-height: 1.4 !important;
+  font-size: 16px !important;
+}
+ul.compact {
+  line-height: 1.5 !important;
+  font-size: 20px !important;
+}
+.writeup {
+    font-size: 20px !important;
+}
+a.sourceLine { background: none !important; }
+section.region { display: none !important; }
+pre.numberSource { margin-left: 2em; }
+div.sourceCode { overflow: hidden; }
+a.sourceLine::before { text-decoration: none; }
+
+</style>
+<script src="../shower/js/jquery-2.2.0.min.js"></script>
+</head>
+<body class="shower list">
+<header class="caption">
+<h1>Security vulnerabilities and their mitigation in native code</h1>
+<p>Taesoo Kim</p>
+</header>
+<header class="caption">
+</header>
+<section class="slide" id="cover">
+<br/><br/><br/><br/>
+<h2>Lec00: Security Vulnerabilities and Their Mitigation in Native Code</h2>
+<p> Taesoo Kim</p>
+<style>
+ #cover h2 {
+   /* margin:180px 0 0; */
+   color: #666;
+   text-align:center;
+   font-size: 50px;
+   font-weight: bold;
+   margin-bottom: 1.5em;
+ }
+ #cover p {
+   margin:30px 0 0;
+   text-align:center;
+   font-style:italic;
+   font-size:40px;
+ }
+ </style>
+</section>
+
+<section class="slide level1" id="about-myself"><div>
+<h1>About Myself</h1>
+<ul>
+<li>Educational Background
+<ul>
+<li>2014-20??: Assistant Professor at Georgia Tech</li>
+<li>2009-2014: S.M./Ph.D. from MIT in CS</li>
+</ul></li>
+<li>Research interests:
+<ul>
+<li>Operating systems, Systesms security, Bug findings, etc.</li>
+</ul></li>
+</ul>
+<p>Visit: <a class="uri" href="https://taesoo.kim">https://taesoo.kim</a> or <a class="uri" href="https://gts3.org">https://gts3.org</a></p>
+</div></section>
+<section class="slide level1" id="sslab-systems-software-and-security-lab"><div>
+<h1>SSLab: Systems Software and Security Lab</h1>
+<p style="text-align:center;margin:0"><img src="img/gts3.png" style="width: 80%"/></p>
+</div></section>
+<section class="slide level1" id="research-interests"><div>
+<h1>Research Interests</h1>
+<ol type="1">
+<li><strong>Bug finding</strong>:
+<ul>
+<li>e.g., static analysis, fuzzing, symbolic execution, etc.</li>
+</ul></li>
+<li><strong>System security</strong>:
+<ul>
+<li>e.g., system updates, Intel SGX, sandboxing, etc.</li>
+</ul></li>
+<li><strong>System scalability</strong>:
+<ul>
+<li>e.g., file system, graph processing, scalable lock, etc.</li>
+</ul></li>
+</ol>
+</div></section>
+<section class="slide level1" id="research-contributions"><div>
+<h1>Research Contributions</h1>
+<ul>
+<li>Over 300 bug fixes and numerious CVEs in Linux, Firefox, OpenSLL, etc.</li>
+</ul>
+<p style="text-align:center;margin:0"><img src="img/cve.png" style="width: 80%"/></p>
+</div></section>
+<section class="slide level1" id="defkor00t-won-def-con-ctf18"><div>
+<h1>DEFKOR00T Won DEF CON CTF’18!</h1>
+<p style="text-align:center;margin:0"><img src="img/defkor00t.png" style="width: 80%"/></p>
+</div></section>
+<section class="slide level1" id="todays-agenda"><div>
+<h1>Today’s Agenda</h1>
+<ul>
+<li>10:00-10:50: <strong>Lec01</strong>: Stack Overflow and Protections</li>
+<li>11:00-11:50: <strong>Lec02</strong>: Format String Vulnerabilities</li>
+<li><em>12:00-12:50: Lunch break</em></li>
+<li>01:00-01:50: <strong>Lec03</strong>: Integer Overflow and Undefined Behavior</li>
+<li>02:00-02:50: <strong>Lec04</strong>: Heap-related Vulnerabilities</li>
+<li>03:00-03:50: <strong>Lec05</strong>: Advanced Topics in Security</li>
+<li>04:00-04:50: <strong>Lec06</strong>: <strong>Tutorial</strong> on Fuzzing and Sanitizers</li>
+</ul>
+</div></section>
+<section class="slide level1" id="trends-of-vulnerability-classes-by-ms"><div>
+<h1>Trends of Vulnerability Classes (by MS)</h1>
+<p style="text-align:center;margin:0"><img src="img/trend.png" style="width:110%"/></p>
+<p>Ref. <a href="https://www.rsaconference.com/writable/presentations/file_upload/br-t07-exploitation-trends-from-potential-risk-to-actual-risk.pdf">Exploitation Trends: From Potential Risk to Actual Risk, RSA 2015</a></p>
+</div></section>
+<section class="slide level1" id="goal-understanding-classes-of-vulns."><div>
+<h1>Goal: Understanding Classes of Vulns.</h1>
+<p style="text-align:center;margin:0"><img src="img/trend2.png" style="width:110%"/></p>
+<p>Ref. <a href="https://www.rsaconference.com/writable/presentations/file_upload/br-t07-exploitation-trends-from-potential-risk-to-actual-risk.pdf">Exploitation Trends: From Potential Risk to Actual Risk, RSA 2015</a></p>
+</div></section>
+<section class="slide level1" id="using-recentreal-world-examples"><div>
+<h1>Using Recent/Real-world Examples</h1>
+<pre><code>Lec01.                            Lec04.
+  Ex1. CVE-2017-15118: QEMU         Ex1. OpenSSL (CVE-2014-0160)
+  Ex2. CVE-2014-4975: Wireshark     Ex2. Wireshark (CVE-2018-11360)
+  Ex3. CVE-2015-7547: glibc*        Ex3. Linux vmcache (CVE-2018-17182)*
+
+Lec02.                            Lec05.
+  Ex1. Linux block (CVE-2013-2851)  Ex1. Linux Perf (CVE-2009-3234/+)
+  Ex2. Linux ext3 (CVE-2013-1848)   Ex2. Linux USB (CVE-2016-4482)
+  Ex3. sudo (CVE-2012-0809)
+
+Lec03.
+  Ex1. Android (CVE-2015-1538, CVE-2015-3824)
+  Ex2. Linux Keyring (CVE-2016-0728)</code></pre>
+</div></section>
+<section class="slide level1" id="tutorial-fuzzing-and-sanitizers"><div>
+<h1>Tutorial: Fuzzing and Sanitizers</h1>
+<div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><a class="sourceLine" id="cb2-1" title="1"><span class="co"># if you haven't downloaded yet!</span></a>
+<a class="sourceLine" id="cb2-2" title="2">$ <span class="fu">wget</span> https://www.dropbox.com/s/7nlsvkg68l70ez8/nutanix.tar.xz</a>
+<a class="sourceLine" id="cb2-3" title="3">  <span class="kw">(</span><span class="ex">or</span> use: https://tc.gts3.org/public/tmp/1180f-nutanix.tar.xz<span class="kw">)</span></a>
+<a class="sourceLine" id="cb2-4" title="4">$ <span class="fu">unxz</span> fuzzing.tar.xz</a>
+<a class="sourceLine" id="cb2-5" title="5">$ <span class="ex">docker</span> load -i fuzzing.tar</a>
+<a class="sourceLine" id="cb2-6" title="6">$ <span class="ex">docker</span> run --privileged -it fuzzing /bin/bash</a>
+<a class="sourceLine" id="cb2-7" title="7"></a>
+<a class="sourceLine" id="cb2-8" title="8"><span class="co"># in docker</span></a>
+<a class="sourceLine" id="cb2-9" title="9">$ <span class="fu">git</span> pull</a>
+<a class="sourceLine" id="cb2-10" title="10">$ <span class="fu">cat</span> README</a></code></pre></div>
+</div></section>
+<div class="progress"><div></div></div>
+<script src="../shower/js/shower.js"></script>
+</body>
+</html>

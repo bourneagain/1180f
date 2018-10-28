@@ -16,7 +16,7 @@ int cmp(unsigned int a, unsigned int b) {
 int main(int argc, char *argv[]) {
   cmp(0, 1);
   cmp(1, 0);
-  cmp((unsigned int)(-100), 200);
+  cmp((unsigned int)10, (unsigned int)-100);
 
   while (1) {
     unsigned int a;

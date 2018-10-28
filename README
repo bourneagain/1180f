@@ -1,0 +1,13 @@
+Security Vulnerabilities and Their Mitigation in Native Code
+============================================================
+
+    - Lec01: Stack Overflow and Protections (lec01-stackovfl/)
+    - Lec02: Format String Vulnerabilities (lec02-fmtstr/)
+    - Lec03: Integer Overflow and Undefined Behavior (lec03-intovfl/)
+    - Lec04: Heap-related Vulnerabilities (lec04-heap/)
+    - Lec05: Advanced Topics in Security (lec05-adv/)
+    - Lec06: Tutorial on Fuzzing and Sanitizers (lec06-fuzzing/)
+
+For tutorial, please see lec06-tut/ and its readme. The intro and
+course agenda is in lec00-intro/. Each directories contain slides
+(html/pdf) and corresponding test samples.

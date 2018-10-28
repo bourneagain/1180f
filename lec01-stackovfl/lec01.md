@@ -1,7 +1,7 @@
 @title(Lec01: Stack Overflow and Protections, Taesoo Kim)
 
 # Goals and Lessons
-- Learn about the stack overflow bugs
+- Learn about the **stack overflow** bugs
 - Understand their security implications (i.e., control hijacking)
 - Understand the off-the-shelf mitigation (i.e., ssp, DEP, RELO, ASLR)
 - Learn them from the real-world examples (i.e., qemu/ruby/wireshark)
@@ -12,19 +12,19 @@
 
 # CS101: What's Wrong?
 
-~~~~{.c}
+~~~~{.c .numberLines}
   main() {
     char buf[16];
     scanf("%s", buf);
   }
 ~~~~
 
-# CS101: What's Wrong?
+# CS101: How to Fix?
 
-~~~~{.c}
+~~~~{.c .numberLines}
   main() {
     char buf[16];
-    scanf("%s", buf);
+    scanf("%s", buf); // BUG!
   }
 ~~~~
 
@@ -35,7 +35,7 @@
 
 # Error-prone C APIs: scanf()
 
-- scanf("%15s", buf) // CORRECT!
+- Answer: scanf("%15s", buf)!
 
 ~~~~{.sh}
 $ cd lec01-stackovfl/apis
@@ -65,24 +65,57 @@ aaaaaaaaaaaaaaaa
 14: DE ()
 ~~~~~~
 
-# Control Hijacking Attack: Basic Idea
+# Security Implication: Control Hijacking
+- The return address can be overwritten by an attacker's input
+- Lead to control hijacking attacks (arbitrary execution)!
 
-~~~~{.c}
+~~~~{.c .numberLines}
+  main() {
+    char buf[16];
+    scanf("%s", buf); // BUG!
+  }
+~~~~
+
+# Basic Idea: Stack Smashing Attack
+
+~~~~{.c .numberLines}
   main() {
     char buf[16];
     scanf("%s", buf); // BUG!
   }
 ~~~~
 ~~~~{.asm}
-(top, growing)
-  |<--- current frame -->|<-- caller-->|
-  [buf           ][fp][ra][...         ]
-  |<----  16 --->|
+(top, growing)         <stack>               (lower)
+                         libc_start_main()
+                         |<-- caller-->|
+        <==              [...  ][fp][ra] ...
+                                 |   |
+                                 |   +---> return address
+                                 +-------> frame pointer (ebp)
+ 
 ~~~~
 
-# Control Hijacking Attack: Basic Idea
+# Basic Idea: Stack Smashing Attack
 
-~~~~{.c}
+~~~~{.c .numberLines}
+  main() {
+    char buf[16];
+    scanf("%s", buf); // BUG!
+  }
+~~~~
+~~~~{.asm}
+(top, growing)                               (lower)
+           main()        libc_start_main()
+  |<--- current frame -->|<-- caller-->|
+  [buf          ][fp][ra][...          ] ... 
+  |<---- 16 --->|  |   |
+                   |   +-------> return address
+                   +-----------> frame pointer (ebp)
+~~~~
+
+# Basic Idea: Stack Smashing Attack
+
+~~~~{.c .numberLines}
   main() {
     char buf[16];
     scanf("%s", buf); // BUG!
@@ -128,16 +161,16 @@ aaaaaaaaaaaaaaaa
 
 # Control Hijacking Attack: Advanced Topics
 
-- Stack pivoting when frame pointer is crafted
-- Even off-by-one (e.g., writing NULL) is enough for stack pivoting
+1. Stack pivoting when frame pointer is crafted
+1. Even off-by-one (e.g., writing NULL) is enough for stack pivoting
 
 ~~~~{.asm}
 (top, growing)
   |<--- current frame -->|<-- caller-->|
   [buf           ][fp][ra][...         ]
   |<----  16 --->|
-(1)AAAAAAAAAAAAAAAAXXXX -> enough to control (i.e., leave; ret)
-(2)AAAAAAAAAAAAAAAAX    -> off-by-one
+1)AAAAAAAAAAAAAAAAXXXX -> enough to control (i.e., leave; ret)
+2)AAAAAAAAAAAAAAAAX    -> off-by-one (e.g., scanf("%16s", buf))
 ~~~~
 
 # Memory Safety in C/C++
@@ -146,29 +179,35 @@ aaaaaaaaaaaaaaaa
 
 # Addressing Memory Safety Issues in C/C++
 - Spatial safety -> e.g., buffer over/underflow
-    - -> Tracking object boundaries and verifying all memory accesses
+    - Tracking object boundaries and verifying all memory accesses
 - Temporal safety -> e.g., use-after-free
-    - -> Tracking life time of objects and verifying all memory accesses
+    - Tracking life time of objects and verifying all memory accesses
 
 Idea in C/C++: if we implement everything *correctly*, we have
 opportunities to make the program much efficient (in terms of
 memory usage) and faster (in terms of execution speed)!
 
-# Error-prone C APIs: strncpy()
-
-- strncpy(char \*dest, const char \*src, size_t n)
+# Error-prone C APIs: strcpy()/strncpy()
+> The  strcpy()  function  copies the string pointed to by src, including
+> the terminating null byte ('\0'), to the buffer  pointed  to  by  dest.
+> The strncpy() function is similar, except that at most n bytes of src
+> are copied.
 
 ~~~~{.c}
+char *strcpy(char *dest, const char *src);
+char *strncpy(char *dest, const char *src, size_t n);
+~~~~
+
+~~~~{.c .numberLines}
     // BUG!
     char buf[BUFSIZ];
     strncpy(buf, input, sizeof(buf));
 ~~~~
 
 # Error-prone C APIs: strncpy()
+- Warning: dest might not be **null-terminated**!
 
-- strncpy(char \*dest, const char \*src, size_t n)
-
-~~~~{.c}
+~~~~{.c .numberLines}
     char buf[BUFSIZ];
     strncpy(buf, input, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
@@ -176,56 +215,104 @@ memory usage) and faster (in terms of execution speed)!
 
 # Error-prone C APIs: strncpy()
 
-- NULL on the remaining bytes (why?)
-- strncpy(buf, "A"\*len(buf), buf) -> leaving buf non-NULL-terminated
-- dest and src should not be overlapping
-- Return dest, not #chars copied!
+1. NULL on the remaining bytes (why?)!
+1. strncpy(buf, "A"\*len(buf), buf) -> leaving buf non-NULL-terminated
+1. Return dest, not #chars copied!
 
-~~~~{.c}
-    char* strncpy(char *dest, const char *src, size_t n) {
-      size_t i;
-      for (i = 0; i < n && src[i] != '\0'; i++)
-        dest[i] = src[i];
-      for ( ; i < n; i++)
-        dest[i] = '\0';
-      return dest;
-    }
+~~~~{.c .numberLines}
+char* strncpy(char *dest, const char *src, size_t n) {
+  size_t i;
+  for (i = 0; i < n && src[i] != '\0'; i++)
+    dest[i] = src[i];
+  for ( ; i < n; i++) // Q1?
+    dest[i] = '\0';
+  return dest;
+}
 ~~~~
 
 # Error-prone C APIs: strncat()
 
-- dest is always NULL-terminated C-string
-- Copy max n + 1 (w/ null)! -> strncat(dest, src, len - 1)
-- Return dest, not #chars copied!
+1. dest is always NULL-terminated C-string!
+1. Copy max n + 1 (w/ null)! -> strncat(dest, src, len - 1)
+1. Return dest, not #chars copied!
 
-~~~~{.c}
-    char* strncat(char *dest, const char *src, size_t n) {
-      size_t dest_len = strlen(dest);
-      for (size_t i = 0 ; i < n && src[i] != '\0' ; i++)
-        dest[dest_len + i] = src[i];
-      dest[dest_len + i] = '\0';
-      return dest;
-    }
+~~~~{.c .numberLines}
+char* strncat(char *dest, const char *src, size_t n) {
+   size_t dest_len = strlen(dest);
+   for (size_t i = 0 ; i < n && src[i] != '\0' ; i++)
+     dest[dest_len + i] = src[i];
+   dest[dest_len + i] = '\0';
+   return dest;
+}
 ~~~~
 
-# Suggestion for C-string manipulation
+# Suggestion for C-string Manipulation
 
 - Use: snprintf(buf, sizeof(buf), ...)
 - Alternatives: strlcpy(), strlcat()
     - Return #chars copied, or strlen(dest)
+    - The full size of dest (not the remaining space)
     - NULL-terminated, unless dest is full in cast of strlcat()
+
+~~~~{.c}
+size_t strlcat(char *dst, const char *src, size_t size);
+size_t strlcpy(char *dst, const char *src, size_t size);
+~~~~
+
+# Error-prone C APIs: fgets()
+
+- Read at most *one less* than size!
+- NULL-terminated!
+
+~~~~{.c}
+char *fgets(char *s, int size, FILE *stream);
+$ cd lec01-stackovfl/apis
+$ ./fgets
+...
+~~~~
+
+# Error-prone C APIs: fgets()
+
+- fgets() accepts input until it sees a newline (\\n)
+- It means that it accepts the terminator char: NULL!
+
+~~~~{.c}
+char *fgets(char *s, int size, FILE *stream);
+$ cd lec01-stackovfl/apis
+$ echo -e "123\x0056" | ./fgets
+01: 31 (1)
+02: 32 (2)
+03: 33 (3)
+04: 00 ()
+05: 35 (5)
+06: 36 (6)
+07: 0A (\n)
+~~~~~
+
+# Error-prone C APIs: fgets()
+
+- size != strlen(input)
+
+~~~~{.c .numberLines}
+size = fgets(input, sizeof(input), stdin);
+// BUG!
+if (strlen(input) < sizeof(dest)) {
+  memcpy(dest, input, size);
+}
+~~~~~
 
 # Outline
 - Real-world examples:
-    1. CVE-2017-15118: QEMU
-    1. CVE-2014-4975: Wireshark
-    1. CVE-2015-7547: glibc getaddrinfo()*
+    1. Ex1. CVE-2017-15118: QEMU
+    1. Ex2. CVE-2014-4975: Wireshark
+    1. (Ex3. CVE-2015-7547: glibc getaddrinfo())*
 - Off-the-shelf defenses:
     1. Stack shield/canary (a.k.a, SSP in gcc)
     1. DEP (NX, W^X)
-- Advance defenses: Shadow stack and CET
+- Advance defenses: Shadow/Safe Stack
 
-# CVE-2017-15118: QEMU
+# CVE-2017-15118: QEMU NBD
+- qemu-io f raw "nbd://localhost:10809/path" -> looking up "path"
 
 ~~~~{.c .numberLines}
 #define NBD_MAX_NAME_SIZE 256
@@ -240,23 +327,39 @@ static int nbd_negotiate_handle_info(...) {
 ~~~~
 
 # CVE-2014-4975: Ruby
+- ["a"*3070].pack("m4000") -> encode(var, "aaa..", 3070, .., true)
 
 ~~~~{.c .numberLines}
-void encodes(..) {
+void encodes(VALUE str, const char *s, long len ...) {
     char buff[4096];
     while (len >= 3) {
         while (len >= 3 && sizeof(buff)-i >= 4) {
             buff[i++] = ..; /* 4 times */;
-            s += 3;
-            len -= 3;
+            s += 3; len -= 3;
         }
         if (sizeof(buff)-i < 4) { /* flush */ }
     }
-    if (len == 2) { ... }
-    else if (len == 1) { ... }
-
+    if (len == 2) { buff[i++] = ...; /* 4 times */ }
+    else if (len == 1) { buff[i++] = ...; /* 4 times */ }
     if (tail_lf) buff[i++] = '\n';
     /* flush */
+}
+~~~~
+
+# CVE-2014-4975: Ruby
+- ["a"*3070].pack("m4000") -> encode(var, "aaa..", 3070, .., true)
+    - buff is used upto 3069 / 3 * 4 = 4092 bytes (*)
+    - Since one more byte left (len == 1), 4 more bytes are used (**)
+    - tail_lf -> one more byte: overflowing "\\n"
+
+~~~~{.c .numberLines}
+void encodes(VALUE str, const char *s, long len ...) {
+    char buff[4096];
+*   while (len >= 3) {...}    // i -> 3069/3 x 4 = 4092 bytes
+    if (len == 2) {...}             
+**  else if (len == 1) {...}  // i += 4 -> 4096 bytes
+*** if (tail_lf)
+      buff[i++] = '\n'        // i += 1 (off-by-one)!
 }
 ~~~~
 
@@ -372,13 +475,21 @@ $ ./canary
 - Why is the terminator canary special?
    - 0x0d000aff: NULL (0x00), CR (0x0d), LF (0x0a) and EOF (0xff)
 - SSP: Used to contain NULL/EOF/LF (06/2014, see [commit](https://github.molgen.mpg.de/git-mirror/glibc/commit/4a103975c4c4929455d60224101013888640cd2f))
-- SSP: Only contains NULL (@MSB) in a recent version
+- SSP: Only contains NULL (@LSB) in a recent version
 
 # SSP: __stack_chk_fail()
 
 - Immediately abort the program like below:
 
+~~~~{.asm}
+! mov    rdx,QWORD PTR [rbp-0x8]   // fetch canary on stack
+! xor    rdx,QWORD PTR fs:0x28     // compare it with @TLS
+! je     func1_benign+0x31
+! call   __stack_chk_fail@plt      // stack smashed!
+~~~~
+
 ~~~~{.sh}
+
 $ cd lec01-stackovfl/ssp
 $ ./ovfl 
 *** stack smashing detected ***: ./ovfl terminated
@@ -410,14 +521,15 @@ __fortify_fail (const char *msg) {
 # SSP: New Implementation
 
 ~~~~{.c .numberLines}
-    /* Don't pass down __libc_argv[0] if we aren't doing backtrace
-       since __libc_argv[0] may point to the corrupted stack.  */
-    __libc_message (need_backtrace ? 
-                     (do_abort | do_backtrace) : do_abort,
-            "*** %s ***: %s terminated\n",
-            msg,
-            (need_backtrace && __libc_argv[0] != NULL
-             ? __libc_argv[0] : "<unknown>"));
+/* Don't pass down __libc_argv[0] if we aren't doing 
+   backtrace since __libc_argv[0] may point to the 
+   corrupted stack. */
+__libc_message (need_backtrace ? 
+                 (do_abort | do_backtrace) : do_abort,
+                "*** %s ***: %s terminated\n",
+                msg,
+                (need_backtrace && __libc_argv[0] != NULL
+                  ? __libc_argv[0] : "<unknown>"));
 ~~~~
 
 # SSP: Placing Local Variables
@@ -453,7 +565,7 @@ func5_buf_and_funcptr():
     - Basically, don't make writable region executable at the same time
 
 ~~~~{.sh}
-cat /proc/self/maps 
+$ cat /proc/self/maps 
 5606bdf09000-5606bdf0b000 r--p /usr/bin/cat
 5606bdf0b000-5606bdf0f000 r-xp /usr/bin/cat
 5606bdf13000-5606bdf14000 rw-p /usr/bin/cat
@@ -532,6 +644,12 @@ $ make check-safestack
 +  add    rdx,0xffffffffffffffd0     ; allocate
 +  mov    QWORD PTR fs:[rax],rdx     ; update stacktop
 ~~~~
+
+# Summary
+- **Stack overflow** vulnerabilities
+- Error-prone APIs: strncpy, scanf, fgets, etc.
+- Understand its security implication (via stack smashing)
+- Mitigation schemes: stack canary and DEP
 
 # References
 

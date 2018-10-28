@@ -415,7 +415,7 @@ BONUS. is it possible that a / b < 0 when a < 0 and b < 0?
  a = INT_MIN && b == -1!
 ~~~
 
-# Integer-related Vulnerabilities
+# Classifying Integer-related Vulnerabilities
 1. Precision (or widthness) overflows
 2. Arithmetic overflows
 3. Signedness bugs
@@ -509,6 +509,24 @@ if (po->tp_version >= TPACKET_V3 &&
     goto out;
 ~~~~
 
+# 3. Signedness Bugs: CVE-2017-7308
+
+~~~~{.c .numberLines}
+// @net/packet/af_packet.c
+//   req->tp_block_size: unsigned int
+//   BLK_PLUS_PRIV(..) : unsigned int
+
+// Q. What if we don't have (int)?
+if (po->tp_version >= TPACKET_V3 &&
+//  (int)(u1 - u2) <= 0
+//    => (unsigned int)100 - (unsigned int)(-200)
+//    => (int)300
+//    => (unsigned int)100 < (unsigned int)(-200)
+*   (int)(req->tp_block_size -
+*         BLK_PLUS_PRIV(req_u->req3.tp_sizeof_priv)) <= 0)
+    goto out;
+~~~~
+
 # CVE-2017-7308: Patch
 
 - Direct comparison of unsigned ints!
@@ -535,9 +553,9 @@ if (po->tp_version >= TPACKET_V3 &&
   0 < 1 = 1?
     (int)(0 - 1) == -1 <= 0? -> 1
   1 < 0 = 0?
-    (int)(1 - 0) ==  1 <= 0? -> 0
-  4294967196 < 200 = 1?
-    (int)(4294967196 - 200) == -300 <= 0? -> 1
+    (int)(1 - 0) == 1 <= 0? -> 0
+  10 < 4294967196 = 0?
+    (int)(10 - 4294967196) == 110 <= 0? -> 0
   unsigned int a = ?
   unsigned int b = ?
 ~~~~
@@ -743,7 +761,7 @@ Ref. <https://en.wikipedia.org/wiki/Integer_overflow>
 ~~~~{.c .numberLines}
 // @edd4a76eb4747bd19ed122df46fa46b452c12a0d
 // CVE-2015-1538
-//   uint32_t mTimeToSampleCount;
+// uint32_t mTimeToSampleCount;
 
      mTimeToSampleCount = U32_AT(&header[4]);
      mTimeToSample = new uint32_t[mTimeToSampleCount * 2];
@@ -753,19 +771,86 @@ Ref. <https://en.wikipedia.org/wiki/Integer_overflow>
      ...
 ~~~~
 
-# CVE-2015-1538: Android (Stagefright)
+# Attempt1 to Fix Stagefright
 
 ~~~~{.c .numberLines}
 // @edd4a76eb4747bd19ed122df46fa46b452c12a0d
 // CVE-2015-1538
+// uint32_t mTimeToSampleCount;
+
      mTimeToSampleCount = U32_AT(&header[4]);
 +    uint64_t allocSize \
-+               = mTimeToSampleCount * 2 * sizeof(uint32_t);
++      = mTimeToSampleCount * 2 * sizeof(uint32_t);
 +    if (allocSize > SIZE_MAX) {
 +      return ERROR_OUT_OF_RANGE;
 +    }
      mTimeToSample = new uint32_t[mTimeToSampleCount * 2];
      ...
+~~~~
+
+# Attempt2 to Fix Stagefright
+- RHS: (unsigned int)mTimeToSampleCount * 2 * sizeof(uint32_t)!
+
+~~~~{.c .numberLines}
+// @e2e812e58e8d2716b00d7d82db99b08d3afb4b32
+     mTimeToSampleCount = U32_AT(&header[4]);
++    uint64_t allocSize \
++      = mTimeToSampleCount * 2 * (uint64_t)sizeof(uint32_t);
++    if (allocSize > SIZE_MAX) {
++      return ERROR_OUT_OF_RANGE;
++    }
+     mTimeToSample = new uint32_t[mTimeToSampleCount * 2];
+     ...
+~~~~
+
+# Attempt3 to Fix Stagefright
+- RHS: (uint64_t)sizeof(uint32_t) is constant, again!
+
+~~~~{.c .numberLines}
+// @a105482ae577852ffd08ce88ae5d1ba81db875ac
+     mTimeToSampleCount = U32_AT(&header[4]);
++    uint64_t allocSize \
++      = (uint64_t)mTimeToSampleCount * 2 * sizeof(uint32_t);
++    if (allocSize > SIZE_MAX) {
++      return ERROR_OUT_OF_RANGE;
++    }
+     mTimeToSample = new uint32_t[mTimeToSampleCount * 2];
+     ...
+~~~~
+
+# Attempt4 to Fix Stagefright
+- RHS: allocSize > SIZE_MAX in 64-bit!
+
+~~~~{.c .numberLines}
+// @a105482ae577852ffd08ce88ae5d1ba81db875ac
+     mTimeToSampleCount = U32_AT(&header[4]);
++    uint64_t allocSize \
++      = (uint64_t)mTimeToSampleCount * 2 * sizeof(uint32_t);
++    if (allocSize > UINT32_MAX) {
++      return ERROR_OUT_OF_RANGE;
++    }
+     mTimeToSample = new uint32_t[mTimeToSampleCount * 2];
+     ...
+~~~~
+
+# CVE-2015-1538: Finally!
+
+~~~~{.c .numberLines}
+// @a3630a418b4f65277a42cd4018cd3b0b7e134d0c
+
++ if (mTimeToSampleCount >
++       UINT32_MAX / (2 * sizeof(uint32_t))) {
++   // Choose this bound because
++   // 1) 2 * sizeof(uint32_t) is the amount of memory needed 
++   //    for one time-to-sample entry in the time-to-sample
++   //    table.
++   // 2) mTimeToSampleCount is the number of entries of the
++   //    time-to-sample table.
++   // 3) We hope that the table size does not exceed
++   //    UINT32_MAX.
+        return ERROR_OUT_OF_RANGE;
+   }
+   ...
 ~~~~
 
 # CVE-2015-3824: Android (Stagefright)

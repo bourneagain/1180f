@@ -518,8 +518,8 @@ a.sourceLine::before { text-decoration: none; }
 <a class="sourceLine" id="cb37-2" title="2"></a>
 <a class="sourceLine" id="cb37-3" title="3"> a = INT_MIN &amp;&amp; b == <span class="dv">-1</span>!</a></code></pre></div>
 </div></section>
-<section class="slide level1" id="integer-related-vulnerabilities"><div>
-<h1>Integer-related Vulnerabilities</h1>
+<section class="slide level1" id="classifying-integer-related-vulnerabilities"><div>
+<h1>Classifying Integer-related Vulnerabilities</h1>
 <ol type="1">
 <li>Precision (or widthness) overflows</li>
 <li>Arithmetic overflows</li>
@@ -612,35 +612,51 @@ a.sourceLine::before { text-decoration: none; }
 <a class="sourceLine" id="cb42-8" title="8">*         BLK_PLUS_PRIV(req_u-&gt;req3.tp_sizeof_priv)) &lt;= <span class="dv">0</span>)</a>
 <a class="sourceLine" id="cb42-9" title="9">    <span class="cf">goto</span> out;</a></code></pre></div>
 </div></section>
+<section class="slide level1" id="signedness-bugs-cve-2017-7308-1"><div>
+<h1>3. Signedness Bugs: CVE-2017-7308</h1>
+<div class="sourceCode" id="cb43"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb43-1" title="1"><span class="co">// @net/packet/af_packet.c</span></a>
+<a class="sourceLine" id="cb43-2" title="2"><span class="co">//   req-&gt;tp_block_size: unsigned int</span></a>
+<a class="sourceLine" id="cb43-3" title="3"><span class="co">//   BLK_PLUS_PRIV(..) : unsigned int</span></a>
+<a class="sourceLine" id="cb43-4" title="4"></a>
+<a class="sourceLine" id="cb43-5" title="5"><span class="co">// Q. What if we don't have (int)?</span></a>
+<a class="sourceLine" id="cb43-6" title="6"><span class="cf">if</span> (po-&gt;tp_version &gt;= TPACKET_V3 &amp;&amp;</a>
+<a class="sourceLine" id="cb43-7" title="7"><span class="co">//  (int)(u1 - u2) &lt;= 0</span></a>
+<a class="sourceLine" id="cb43-8" title="8"><span class="co">//    =&gt; (unsigned int)100 - (unsigned int)(-200)</span></a>
+<a class="sourceLine" id="cb43-9" title="9"><span class="co">//    =&gt; (int)300</span></a>
+<a class="sourceLine" id="cb43-10" title="10"><span class="co">//    =&gt; (unsigned int)100 &lt; (unsigned int)(-200)</span></a>
+<a class="sourceLine" id="cb43-11" title="11">*   (<span class="dt">int</span>)(req-&gt;tp_block_size -</a>
+<a class="sourceLine" id="cb43-12" title="12">*         BLK_PLUS_PRIV(req_u-&gt;req3.tp_sizeof_priv)) &lt;= <span class="dv">0</span>)</a>
+<a class="sourceLine" id="cb43-13" title="13">    <span class="cf">goto</span> out;</a></code></pre></div>
+</div></section>
 <section class="slide level1" id="cve-2017-7308-patch"><div>
 <h1>CVE-2017-7308: Patch</h1>
 <ul>
 <li>Direct comparison of unsigned ints!</li>
 <li>Fix a potential overflow inside the macro as well</li>
 </ul>
-<div class="sourceCode" id="cb43"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb43-1" title="1"><span class="co">// @net/packet/af_packet.c</span></a>
-<a class="sourceLine" id="cb43-2" title="2"><span class="co">//   req-&gt;tp_block_size: unsigned int</span></a>
-<a class="sourceLine" id="cb43-3" title="3"><span class="co">//   BLK_PLUS_PRIV(..) : unsigned long long</span></a>
-<a class="sourceLine" id="cb43-4" title="4"></a>
-<a class="sourceLine" id="cb43-5" title="5"><span class="cf">if</span> (po-&gt;tp_version &gt;= TPACKET_V3 &amp;&amp;</a>
-<a class="sourceLine" id="cb43-6" title="6">*   req-&gt;tp_block_size </a>
-<a class="sourceLine" id="cb43-7" title="7">*     &lt;= BLK_PLUS_PRIV((u64)req_u-&gt;req3.tp_sizeof_priv))</a>
-<a class="sourceLine" id="cb43-8" title="8">    <span class="cf">goto</span> out;</a></code></pre></div>
+<div class="sourceCode" id="cb44"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb44-1" title="1"><span class="co">// @net/packet/af_packet.c</span></a>
+<a class="sourceLine" id="cb44-2" title="2"><span class="co">//   req-&gt;tp_block_size: unsigned int</span></a>
+<a class="sourceLine" id="cb44-3" title="3"><span class="co">//   BLK_PLUS_PRIV(..) : unsigned long long</span></a>
+<a class="sourceLine" id="cb44-4" title="4"></a>
+<a class="sourceLine" id="cb44-5" title="5"><span class="cf">if</span> (po-&gt;tp_version &gt;= TPACKET_V3 &amp;&amp;</a>
+<a class="sourceLine" id="cb44-6" title="6">*   req-&gt;tp_block_size </a>
+<a class="sourceLine" id="cb44-7" title="7">*     &lt;= BLK_PLUS_PRIV((u64)req_u-&gt;req3.tp_sizeof_priv))</a>
+<a class="sourceLine" id="cb44-8" title="8">    <span class="cf">goto</span> out;</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="testing-signedness-bugs"><div>
 <h1>Testing Signedness Bugs</h1>
-<div class="sourceCode" id="cb44"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb44-1" title="1">  $ cd lec03-intovfl/intovfl</a>
-<a class="sourceLine" id="cb44-2" title="2">  $ make</a>
-<a class="sourceLine" id="cb44-3" title="3"></a>
-<a class="sourceLine" id="cb44-4" title="4">  $ ./uintcmp</a>
-<a class="sourceLine" id="cb44-5" title="5">  <span class="dv">0</span> &lt; <span class="dv">1</span> = <span class="dv">1</span>?</a>
-<a class="sourceLine" id="cb44-6" title="6">    (<span class="dt">int</span>)(<span class="dv">0</span> - <span class="dv">1</span>) == <span class="dv">-1</span> &lt;= <span class="dv">0</span>? -&gt; <span class="dv">1</span></a>
-<a class="sourceLine" id="cb44-7" title="7">  <span class="dv">1</span> &lt; <span class="dv">0</span> = <span class="dv">0</span>?</a>
-<a class="sourceLine" id="cb44-8" title="8">    (<span class="dt">int</span>)(<span class="dv">1</span> - <span class="dv">0</span>) ==  <span class="dv">1</span> &lt;= <span class="dv">0</span>? -&gt; <span class="dv">0</span></a>
-<a class="sourceLine" id="cb44-9" title="9">  <span class="dv">4294967196</span> &lt; <span class="dv">200</span> = <span class="dv">1</span>?</a>
-<a class="sourceLine" id="cb44-10" title="10">    (<span class="dt">int</span>)(<span class="dv">4294967196</span> - <span class="dv">200</span>) == <span class="dv">-300</span> &lt;= <span class="dv">0</span>? -&gt; <span class="dv">1</span></a>
-<a class="sourceLine" id="cb44-11" title="11">  <span class="dt">unsigned</span> <span class="dt">int</span> a = ?</a>
-<a class="sourceLine" id="cb44-12" title="12">  <span class="dt">unsigned</span> <span class="dt">int</span> b = ?</a></code></pre></div>
+<div class="sourceCode" id="cb45"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb45-1" title="1">  $ cd lec03-intovfl/intovfl</a>
+<a class="sourceLine" id="cb45-2" title="2">  $ make</a>
+<a class="sourceLine" id="cb45-3" title="3"></a>
+<a class="sourceLine" id="cb45-4" title="4">  $ ./uintcmp</a>
+<a class="sourceLine" id="cb45-5" title="5">  <span class="dv">0</span> &lt; <span class="dv">1</span> = <span class="dv">1</span>?</a>
+<a class="sourceLine" id="cb45-6" title="6">    (<span class="dt">int</span>)(<span class="dv">0</span> - <span class="dv">1</span>) == <span class="dv">-1</span> &lt;= <span class="dv">0</span>? -&gt; <span class="dv">1</span></a>
+<a class="sourceLine" id="cb45-7" title="7">  <span class="dv">1</span> &lt; <span class="dv">0</span> = <span class="dv">0</span>?</a>
+<a class="sourceLine" id="cb45-8" title="8">    (<span class="dt">int</span>)(<span class="dv">1</span> - <span class="dv">0</span>) == <span class="dv">1</span> &lt;= <span class="dv">0</span>? -&gt; <span class="dv">0</span></a>
+<a class="sourceLine" id="cb45-9" title="9">  <span class="dv">10</span> &lt; <span class="dv">4294967196</span> = <span class="dv">0</span>?</a>
+<a class="sourceLine" id="cb45-10" title="10">    (<span class="dt">int</span>)(<span class="dv">10</span> - <span class="dv">4294967196</span>) == <span class="dv">110</span> &lt;= <span class="dv">0</span>? -&gt; <span class="dv">0</span></a>
+<a class="sourceLine" id="cb45-11" title="11">  <span class="dt">unsigned</span> <span class="dt">int</span> a = ?</a>
+<a class="sourceLine" id="cb45-12" title="12">  <span class="dt">unsigned</span> <span class="dt">int</span> b = ?</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="undefined-behaviors-naclx86"><div>
 <h1>4. Undefined Behaviors: NaCL/x86</h1>
@@ -648,14 +664,14 @@ a.sourceLine::before { text-decoration: none; }
 <li>Shifting more than the available #bits</li>
 <li>Result in the entire sandbox sequence no-op!</li>
 </ul>
-<div class="sourceCode" id="cb45"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb45-1" title="1"><span class="co">// @NaClSandboxAddr()</span></a>
-<a class="sourceLine" id="cb45-2" title="2">                                 +--&gt; <span class="dv">32</span> bytes in x32</a>
-<a class="sourceLine" id="cb45-3" title="3">                                 |</a>
-<a class="sourceLine" id="cb45-4" title="4">                                 +------------------</a>
-<a class="sourceLine" id="cb45-5" title="5"><span class="cf">return</span> addr &amp; ~(<span class="dt">uintptr_t</span>)((<span class="dv">1</span> &lt;&lt; nap-&gt;align_boundary) - <span class="dv">1</span>);</a>
-<a class="sourceLine" id="cb45-6" title="6">                           +-------------------------</a>
-<a class="sourceLine" id="cb45-7" title="7">                           |</a>
-<a class="sourceLine" id="cb45-8" title="8">                           +--&gt; (<span class="dv">1</span> &lt;&lt; <span class="dv">32</span>) -&gt; <span class="dv">1</span> in gcc!</a></code></pre></div>
+<div class="sourceCode" id="cb46"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb46-1" title="1"><span class="co">// @NaClSandboxAddr()</span></a>
+<a class="sourceLine" id="cb46-2" title="2">                                 +--&gt; <span class="dv">32</span> bytes in x32</a>
+<a class="sourceLine" id="cb46-3" title="3">                                 |</a>
+<a class="sourceLine" id="cb46-4" title="4">                                 +------------------</a>
+<a class="sourceLine" id="cb46-5" title="5"><span class="cf">return</span> addr &amp; ~(<span class="dt">uintptr_t</span>)((<span class="dv">1</span> &lt;&lt; nap-&gt;align_boundary) - <span class="dv">1</span>);</a>
+<a class="sourceLine" id="cb46-6" title="6">                           +-------------------------</a>
+<a class="sourceLine" id="cb46-7" title="7">                           |</a>
+<a class="sourceLine" id="cb46-8" title="8">                           +--&gt; (<span class="dv">1</span> &lt;&lt; <span class="dv">32</span>) -&gt; <span class="dv">1</span> in gcc!</a></code></pre></div>
 <p>Ref. <a class="uri" href="https://bugs.chromium.org/p/nativeclient/issues/detail?id=245">https://bugs.chromium.org/p/nativeclient/issues/detail?id=245</a></p>
 </div></section>
 <section class="slide level1" id="secure-way-to-add-two-ints"><div>
@@ -663,50 +679,50 @@ a.sourceLine::before { text-decoration: none; }
 <ul>
 <li><a href="https://wiki.sei.cmu.edu/confluence/display/c/INT32-C.+Ensure+that+operations+on+signed+integers+do+not+result+in+overflow">SEI CERT C Coding Standard</a></li>
 </ul>
-<div class="sourceCode" id="cb46"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb46-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
-<a class="sourceLine" id="cb46-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> sum = si_a + si_b;</a>
-<a class="sourceLine" id="cb46-3" title="3">  <span class="co">/* ... */</span></a>
-<a class="sourceLine" id="cb46-4" title="4">}</a></code></pre></div>
+<div class="sourceCode" id="cb47"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb47-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
+<a class="sourceLine" id="cb47-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> sum = si_a + si_b;</a>
+<a class="sourceLine" id="cb47-3" title="3">  <span class="co">/* ... */</span></a>
+<a class="sourceLine" id="cb47-4" title="4">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="secure-way-to-add-two-ints-1"><div>
 <h1>Secure Way to Add Two Ints</h1>
-<div class="sourceCode" id="cb47"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb47-1" title="1"><span class="pp">#include </span><span class="im">&lt;limits.h&gt;</span></a>
-<a class="sourceLine" id="cb47-2" title="2">  </a>
-<a class="sourceLine" id="cb47-3" title="3"><span class="dt">void</span> f(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
-<a class="sourceLine" id="cb47-4" title="4">  <span class="dt">signed</span> <span class="dt">int</span> sum;</a>
-<a class="sourceLine" id="cb47-5" title="5">  <span class="cf">if</span> (((si_b &gt; <span class="dv">0</span>) &amp;&amp; (si_a &gt; (INT_MAX - si_b))) ||</a>
-<a class="sourceLine" id="cb47-6" title="6">      ((si_b &lt; <span class="dv">0</span>) &amp;&amp; (si_a &lt; (INT_MIN - si_b)))) {</a>
-<a class="sourceLine" id="cb47-7" title="7">    <span class="co">/* Handle error */</span></a>
-<a class="sourceLine" id="cb47-8" title="8">  } <span class="cf">else</span> {</a>
-<a class="sourceLine" id="cb47-9" title="9">    sum = si_a + si_b;</a>
-<a class="sourceLine" id="cb47-10" title="10">  }</a>
-<a class="sourceLine" id="cb47-11" title="11">  <span class="co">/* ... */</span></a>
-<a class="sourceLine" id="cb47-12" title="12">}</a></code></pre></div>
+<div class="sourceCode" id="cb48"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb48-1" title="1"><span class="pp">#include </span><span class="im">&lt;limits.h&gt;</span></a>
+<a class="sourceLine" id="cb48-2" title="2">  </a>
+<a class="sourceLine" id="cb48-3" title="3"><span class="dt">void</span> f(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
+<a class="sourceLine" id="cb48-4" title="4">  <span class="dt">signed</span> <span class="dt">int</span> sum;</a>
+<a class="sourceLine" id="cb48-5" title="5">  <span class="cf">if</span> (((si_b &gt; <span class="dv">0</span>) &amp;&amp; (si_a &gt; (INT_MAX - si_b))) ||</a>
+<a class="sourceLine" id="cb48-6" title="6">      ((si_b &lt; <span class="dv">0</span>) &amp;&amp; (si_a &lt; (INT_MIN - si_b)))) {</a>
+<a class="sourceLine" id="cb48-7" title="7">    <span class="co">/* Handle error */</span></a>
+<a class="sourceLine" id="cb48-8" title="8">  } <span class="cf">else</span> {</a>
+<a class="sourceLine" id="cb48-9" title="9">    sum = si_a + si_b;</a>
+<a class="sourceLine" id="cb48-10" title="10">  }</a>
+<a class="sourceLine" id="cb48-11" title="11">  <span class="co">/* ... */</span></a>
+<a class="sourceLine" id="cb48-12" title="12">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="secure-way-to-multiplying-two-ints"><div>
 <h1>Secure Way to Multiplying Two Ints</h1>
-<div class="sourceCode" id="cb48"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb48-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
-<a class="sourceLine" id="cb48-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> result = si_a * si_b;</a>
-<a class="sourceLine" id="cb48-3" title="3">  <span class="co">/* ... */</span></a>
-<a class="sourceLine" id="cb48-4" title="4">}</a></code></pre></div>
+<div class="sourceCode" id="cb49"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb49-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
+<a class="sourceLine" id="cb49-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> result = si_a * si_b;</a>
+<a class="sourceLine" id="cb49-3" title="3">  <span class="co">/* ... */</span></a>
+<a class="sourceLine" id="cb49-4" title="4">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="secure-way-to-multiplying-two-ints-1"><div>
 <h1>Secure Way to Multiplying Two Ints</h1>
-<div class="sourceCode" id="cb49"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb49-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
-<a class="sourceLine" id="cb49-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> result;</a>
-<a class="sourceLine" id="cb49-3" title="3">  <span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span> tmp;</a>
-<a class="sourceLine" id="cb49-4" title="4"></a>
-<a class="sourceLine" id="cb49-5" title="5">  tmp = (<span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span>)si_a * (<span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span>)si_b;</a>
-<a class="sourceLine" id="cb49-6" title="6">  </a>
-<a class="sourceLine" id="cb49-7" title="7">  <span class="co">/* If the product cannot be represented as a 32-bit integer,</span></a>
-<a class="sourceLine" id="cb49-8" title="8"><span class="co">     handle as an error condition. */</span></a>
-<a class="sourceLine" id="cb49-9" title="9">  <span class="cf">if</span> ((tmp &gt; INT_MAX) || (tmp &lt; INT_MIN)) {</a>
-<a class="sourceLine" id="cb49-10" title="10">    <span class="co">/* Handle error */</span></a>
-<a class="sourceLine" id="cb49-11" title="11">  } <span class="cf">else</span> {</a>
-<a class="sourceLine" id="cb49-12" title="12">    result = (<span class="dt">int</span>)tmp;</a>
-<a class="sourceLine" id="cb49-13" title="13">  }</a>
-<a class="sourceLine" id="cb49-14" title="14">  <span class="co">/* ... */</span></a>
-<a class="sourceLine" id="cb49-15" title="15">}</a></code></pre></div>
+<div class="sourceCode" id="cb50"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb50-1" title="1"><span class="dt">void</span> func(<span class="dt">signed</span> <span class="dt">int</span> si_a, <span class="dt">signed</span> <span class="dt">int</span> si_b) {</a>
+<a class="sourceLine" id="cb50-2" title="2">  <span class="dt">signed</span> <span class="dt">int</span> result;</a>
+<a class="sourceLine" id="cb50-3" title="3">  <span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span> tmp;</a>
+<a class="sourceLine" id="cb50-4" title="4"></a>
+<a class="sourceLine" id="cb50-5" title="5">  tmp = (<span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span>)si_a * (<span class="dt">signed</span> <span class="dt">long</span> <span class="dt">long</span>)si_b;</a>
+<a class="sourceLine" id="cb50-6" title="6">  </a>
+<a class="sourceLine" id="cb50-7" title="7">  <span class="co">/* If the product cannot be represented as a 32-bit integer,</span></a>
+<a class="sourceLine" id="cb50-8" title="8"><span class="co">     handle as an error condition. */</span></a>
+<a class="sourceLine" id="cb50-9" title="9">  <span class="cf">if</span> ((tmp &gt; INT_MAX) || (tmp &lt; INT_MIN)) {</a>
+<a class="sourceLine" id="cb50-10" title="10">    <span class="co">/* Handle error */</span></a>
+<a class="sourceLine" id="cb50-11" title="11">  } <span class="cf">else</span> {</a>
+<a class="sourceLine" id="cb50-12" title="12">    result = (<span class="dt">int</span>)tmp;</a>
+<a class="sourceLine" id="cb50-13" title="13">  }</a>
+<a class="sourceLine" id="cb50-14" title="14">  <span class="co">/* ... */</span></a>
+<a class="sourceLine" id="cb50-15" title="15">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="secure-way-to-multiplying-two-ints-2"><div>
 <h1>Secure Way to Multiplying Two Ints</h1>
@@ -714,73 +730,73 @@ a.sourceLine::before { text-decoration: none; }
 </div></section>
 <section class="slide level1" id="case-study-chackra-core-multiplying-ints"><div>
 <h1>Case Study: Chackra Core (Multiplying Ints)</h1>
-<div class="sourceCode" id="cb50"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb50-1" title="1"><span class="co">// Returns true if we overflowed, false if we didn't</span></a>
-<a class="sourceLine" id="cb50-2" title="2"><span class="dt">bool</span> Int64Math::Mul(int64 left, int64 right, int64 *pResult) {</a>
-<a class="sourceLine" id="cb50-3" title="3"><span class="pp">#if defined(_M_X64) </span></a>
-<a class="sourceLine" id="cb50-4" title="4">  <span class="co">// (I)MUL (Q/64) R[D/A]X &lt;- RAX * r/m64</span></a>
-<a class="sourceLine" id="cb50-5" title="5">  int64 high;</a>
-<a class="sourceLine" id="cb50-6" title="6">  *pResult = _mul128(left, right, &amp;high);</a>
-<a class="sourceLine" id="cb50-7" title="7">  <span class="cf">return</span> ((*pResult &gt; <span class="dv">0</span>) &amp;&amp; high != <span class="dv">0</span>) \</a>
-<a class="sourceLine" id="cb50-8" title="8">           || ((*pResult &lt; <span class="dv">0</span>) &amp;&amp; (high != <span class="dv">-1</span>));</a>
-<a class="sourceLine" id="cb50-9" title="9"><span class="pp">#else</span></a>
-<a class="sourceLine" id="cb50-10" title="10">  *pResult = left * right;</a>
-<a class="sourceLine" id="cb50-11" title="11">  <span class="cf">return</span> (left != <span class="dv">0</span> &amp;&amp; right != <span class="dv">0</span> \</a>
-<a class="sourceLine" id="cb50-12" title="12">           &amp;&amp; (*pResult / left) != right);</a>
-<a class="sourceLine" id="cb50-13" title="13"><span class="pp">#endif</span></a>
-<a class="sourceLine" id="cb50-14" title="14">}</a></code></pre></div>
+<div class="sourceCode" id="cb51"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb51-1" title="1"><span class="co">// Returns true if we overflowed, false if we didn't</span></a>
+<a class="sourceLine" id="cb51-2" title="2"><span class="dt">bool</span> Int64Math::Mul(int64 left, int64 right, int64 *pResult) {</a>
+<a class="sourceLine" id="cb51-3" title="3"><span class="pp">#if defined(_M_X64) </span></a>
+<a class="sourceLine" id="cb51-4" title="4">  <span class="co">// (I)MUL (Q/64) R[D/A]X &lt;- RAX * r/m64</span></a>
+<a class="sourceLine" id="cb51-5" title="5">  int64 high;</a>
+<a class="sourceLine" id="cb51-6" title="6">  *pResult = _mul128(left, right, &amp;high);</a>
+<a class="sourceLine" id="cb51-7" title="7">  <span class="cf">return</span> ((*pResult &gt; <span class="dv">0</span>) &amp;&amp; high != <span class="dv">0</span>) \</a>
+<a class="sourceLine" id="cb51-8" title="8">           || ((*pResult &lt; <span class="dv">0</span>) &amp;&amp; (high != <span class="dv">-1</span>));</a>
+<a class="sourceLine" id="cb51-9" title="9"><span class="pp">#else</span></a>
+<a class="sourceLine" id="cb51-10" title="10">  *pResult = left * right;</a>
+<a class="sourceLine" id="cb51-11" title="11">  <span class="cf">return</span> (left != <span class="dv">0</span> &amp;&amp; right != <span class="dv">0</span> \</a>
+<a class="sourceLine" id="cb51-12" title="12">           &amp;&amp; (*pResult / left) != right);</a>
+<a class="sourceLine" id="cb51-13" title="13"><span class="pp">#endif</span></a>
+<a class="sourceLine" id="cb51-14" title="14">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="case-study-glibc-multiplying-uints"><div>
 <h1>Case Study: glibc (Multiplying UInts)</h1>
-<div class="sourceCode" id="cb51"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb51-1" title="1"><span class="dt">static</span> <span class="kw">inline</span> <span class="dt">bool</span></a>
-<a class="sourceLine" id="cb51-2" title="2">check_mul_overflow_size_t(<span class="dt">size_t</span> left, <span class="dt">size_t</span> right, </a>
-<a class="sourceLine" id="cb51-3" title="3">                          <span class="dt">size_t</span> *result) {</a>
-<a class="sourceLine" id="cb51-4" title="4">  <span class="co">/* size_t is unsigned </span></a>
-<a class="sourceLine" id="cb51-5" title="5"><span class="co">     so the behavior on overflow is defined. */</span></a>
-<a class="sourceLine" id="cb51-6" title="6">  *result = left * right;</a>
-<a class="sourceLine" id="cb51-7" title="7">  <span class="dt">size_t</span> half_size_t \</a>
-<a class="sourceLine" id="cb51-8" title="8">    = ((<span class="dt">size_t</span>) <span class="dv">1</span>) &lt;&lt; (<span class="dv">8</span> * <span class="kw">sizeof</span> (<span class="dt">size_t</span>) / <span class="dv">2</span>);</a>
-<a class="sourceLine" id="cb51-9" title="9"></a>
-<a class="sourceLine" id="cb51-10" title="10">  <span class="cf">if</span> ((left | right) &gt;= half_size_t) {</a>
-<a class="sourceLine" id="cb51-11" title="11">    <span class="cf">if</span> (right != <span class="dv">0</span> &amp;&amp; *result / right != left)</a>
-<a class="sourceLine" id="cb51-12" title="12">      <span class="cf">return</span> true;</a>
-<a class="sourceLine" id="cb51-13" title="13">  }</a>
-<a class="sourceLine" id="cb51-14" title="14">  <span class="cf">return</span> false;</a>
-<a class="sourceLine" id="cb51-15" title="15">}</a></code></pre></div>
+<div class="sourceCode" id="cb52"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb52-1" title="1"><span class="dt">static</span> <span class="kw">inline</span> <span class="dt">bool</span></a>
+<a class="sourceLine" id="cb52-2" title="2">check_mul_overflow_size_t(<span class="dt">size_t</span> left, <span class="dt">size_t</span> right, </a>
+<a class="sourceLine" id="cb52-3" title="3">                          <span class="dt">size_t</span> *result) {</a>
+<a class="sourceLine" id="cb52-4" title="4">  <span class="co">/* size_t is unsigned </span></a>
+<a class="sourceLine" id="cb52-5" title="5"><span class="co">     so the behavior on overflow is defined. */</span></a>
+<a class="sourceLine" id="cb52-6" title="6">  *result = left * right;</a>
+<a class="sourceLine" id="cb52-7" title="7">  <span class="dt">size_t</span> half_size_t \</a>
+<a class="sourceLine" id="cb52-8" title="8">    = ((<span class="dt">size_t</span>) <span class="dv">1</span>) &lt;&lt; (<span class="dv">8</span> * <span class="kw">sizeof</span> (<span class="dt">size_t</span>) / <span class="dv">2</span>);</a>
+<a class="sourceLine" id="cb52-9" title="9"></a>
+<a class="sourceLine" id="cb52-10" title="10">  <span class="cf">if</span> ((left | right) &gt;= half_size_t) {</a>
+<a class="sourceLine" id="cb52-11" title="11">    <span class="cf">if</span> (right != <span class="dv">0</span> &amp;&amp; *result / right != left)</a>
+<a class="sourceLine" id="cb52-12" title="12">      <span class="cf">return</span> true;</a>
+<a class="sourceLine" id="cb52-13" title="13">  }</a>
+<a class="sourceLine" id="cb52-14" title="14">  <span class="cf">return</span> false;</a>
+<a class="sourceLine" id="cb52-15" title="15">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="new-proposals-__builtin__overflow"><div>
 <h1>New Proposals: __builtin_*_overflow()</h1>
 <ul>
 <li>Ref. <a class="uri" href="https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html">https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html</a></li>
 </ul>
-<div class="sourceCode" id="cb52"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb52-1" title="1"><span class="dt">bool</span> __builtin_add_overflow (type1 a, type2 b, type3 *res);</a>
-<a class="sourceLine" id="cb52-2" title="2"><span class="dt">bool</span> __builtin_sub_overflow (type1 a, type2 b, type3 *res);</a>
-<a class="sourceLine" id="cb52-3" title="3"><span class="dt">bool</span> __builtin_mul_overflow (type1 a, type2 b, type3 *res);</a>
-<a class="sourceLine" id="cb52-4" title="4"></a>
-<a class="sourceLine" id="cb52-5" title="5"><span class="dt">bool</span> __builtin_uadd_overflow (<span class="dt">unsigned</span> <span class="dt">int</span> a, <span class="dt">unsigned</span> <span class="dt">int</span> b,</a>
-<a class="sourceLine" id="cb52-6" title="6">                              <span class="dt">unsigned</span> <span class="dt">int</span> *res);</a>
-<a class="sourceLine" id="cb52-7" title="7">...</a></code></pre></div>
+<div class="sourceCode" id="cb53"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb53-1" title="1"><span class="dt">bool</span> __builtin_add_overflow (type1 a, type2 b, type3 *res);</a>
+<a class="sourceLine" id="cb53-2" title="2"><span class="dt">bool</span> __builtin_sub_overflow (type1 a, type2 b, type3 *res);</a>
+<a class="sourceLine" id="cb53-3" title="3"><span class="dt">bool</span> __builtin_mul_overflow (type1 a, type2 b, type3 *res);</a>
+<a class="sourceLine" id="cb53-4" title="4"></a>
+<a class="sourceLine" id="cb53-5" title="5"><span class="dt">bool</span> __builtin_uadd_overflow (<span class="dt">unsigned</span> <span class="dt">int</span> a, <span class="dt">unsigned</span> <span class="dt">int</span> b,</a>
+<a class="sourceLine" id="cb53-6" title="6">                              <span class="dt">unsigned</span> <span class="dt">int</span> *res);</a>
+<a class="sourceLine" id="cb53-7" title="7">...</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="taking-advantage-of-erflags-in-x86"><div>
 <h1>Taking Advantage of E/RFLAGS in x86</h1>
-<div class="sourceCode" id="cb53"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb53-1" title="1">    <span class="dt">bool</span> __builtin_add_overflow (type1 a, type2 b, type3 *res);</a>
-<a class="sourceLine" id="cb53-2" title="2"></a>
-<a class="sourceLine" id="cb53-3" title="3">    11bb:   mov    ecx,<span class="bn">0x0</span></a>
-<a class="sourceLine" id="cb53-4" title="4">    11c0:   add    eax,edx</a>
-<a class="sourceLine" id="cb53-5" title="5">    11c2:   jno    11c9 &lt;main+<span class="bn">0x70</span>&gt;</a>
-<a class="sourceLine" id="cb53-6" title="6">    11c4:   mov    ecx,<span class="bn">0x1</span></a>
-<a class="sourceLine" id="cb53-7" title="7">    llc9:   ...</a></code></pre></div>
+<div class="sourceCode" id="cb54"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb54-1" title="1">    <span class="dt">bool</span> __builtin_add_overflow (type1 a, type2 b, type3 *res);</a>
+<a class="sourceLine" id="cb54-2" title="2"></a>
+<a class="sourceLine" id="cb54-3" title="3">    11bb:   mov    ecx,<span class="bn">0x0</span></a>
+<a class="sourceLine" id="cb54-4" title="4">    11c0:   add    eax,edx</a>
+<a class="sourceLine" id="cb54-5" title="5">    11c2:   jno    11c9 &lt;main+<span class="bn">0x70</span>&gt;</a>
+<a class="sourceLine" id="cb54-6" title="6">    11c4:   mov    ecx,<span class="bn">0x1</span></a>
+<a class="sourceLine" id="cb54-7" title="7">    llc9:   ...</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="example-new-calloc"><div>
 <h1>Example: New calloc()</h1>
-<div class="sourceCode" id="cb54"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb54-1" title="1"><span class="dt">void</span> * calloc (<span class="dt">size_t</span> x, <span class="dt">size_t</span> y) {</a>
-<a class="sourceLine" id="cb54-2" title="2">  <span class="dt">size_t</span> sz;</a>
-<a class="sourceLine" id="cb54-3" title="3">  <span class="cf">if</span> (__builtin_mul_overflow (x, y, &amp;sz))</a>
-<a class="sourceLine" id="cb54-4" title="4">    <span class="cf">return</span> NULL;</a>
-<a class="sourceLine" id="cb54-5" title="5">  <span class="dt">void</span> *ret = malloc (sz);</a>
-<a class="sourceLine" id="cb54-6" title="6">  <span class="cf">if</span> (ret)</a>
-<a class="sourceLine" id="cb54-7" title="7">    memset (ret, <span class="dv">0</span>, sz);</a>
-<a class="sourceLine" id="cb54-8" title="8">  <span class="cf">return</span> ret;</a>
-<a class="sourceLine" id="cb54-9" title="9">}</a></code></pre></div>
+<div class="sourceCode" id="cb55"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb55-1" title="1"><span class="dt">void</span> * calloc (<span class="dt">size_t</span> x, <span class="dt">size_t</span> y) {</a>
+<a class="sourceLine" id="cb55-2" title="2">  <span class="dt">size_t</span> sz;</a>
+<a class="sourceLine" id="cb55-3" title="3">  <span class="cf">if</span> (__builtin_mul_overflow (x, y, &amp;sz))</a>
+<a class="sourceLine" id="cb55-4" title="4">    <span class="cf">return</span> NULL;</a>
+<a class="sourceLine" id="cb55-5" title="5">  <span class="dt">void</span> *ret = malloc (sz);</a>
+<a class="sourceLine" id="cb55-6" title="6">  <span class="cf">if</span> (ret)</a>
+<a class="sourceLine" id="cb55-7" title="7">    memset (ret, <span class="dv">0</span>, sz);</a>
+<a class="sourceLine" id="cb55-8" title="8">  <span class="cf">return</span> ret;</a>
+<a class="sourceLine" id="cb55-9" title="9">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="integer-overflow-beyond-security"><div>
 <h1>Integer Overflow Beyond Security</h1>
@@ -796,15 +812,15 @@ a.sourceLine::before { text-decoration: none; }
 <ul>
 <li>Option: -fwrapv (gcc/clang)</li>
 </ul>
-<div class="sourceCode" id="cb55"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb55-1" title="1">  <span class="co">// $ cd lec03-intovfl/intovfl</span></a>
-<a class="sourceLine" id="cb55-2" title="2">  <span class="co">// $ make check-fwrapv</span></a>
-<a class="sourceLine" id="cb55-3" title="3"></a>
-<a class="sourceLine" id="cb55-4" title="4">  <span class="dt">int</span> base;</a>
-<a class="sourceLine" id="cb55-5" title="5">  scanf(<span class="st">"%d"</span>, &amp;base);</a>
-<a class="sourceLine" id="cb55-6" title="6"></a>
-<a class="sourceLine" id="cb55-7" title="7">  <span class="co">// Q. base = INT_MAX?</span></a>
-<a class="sourceLine" id="cb55-8" title="8">  <span class="cf">if</span> (base &lt; base + <span class="dv">1</span>)</a>
-<a class="sourceLine" id="cb55-9" title="9">    printf(<span class="st">"base &lt; base + 1 is true!</span><span class="sc">\n</span><span class="st">"</span>);</a></code></pre></div>
+<div class="sourceCode" id="cb56"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb56-1" title="1">  <span class="co">// $ cd lec03-intovfl/intovfl</span></a>
+<a class="sourceLine" id="cb56-2" title="2">  <span class="co">// $ make check-fwrapv</span></a>
+<a class="sourceLine" id="cb56-3" title="3"></a>
+<a class="sourceLine" id="cb56-4" title="4">  <span class="dt">int</span> base;</a>
+<a class="sourceLine" id="cb56-5" title="5">  scanf(<span class="st">"%d"</span>, &amp;base);</a>
+<a class="sourceLine" id="cb56-6" title="6"></a>
+<a class="sourceLine" id="cb56-7" title="7">  <span class="co">// Q. base = INT_MAX?</span></a>
+<a class="sourceLine" id="cb56-8" title="8">  <span class="cf">if</span> (base &lt; base + <span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb56-9" title="9">    printf(<span class="st">"base &lt; base + 1 is true!</span><span class="sc">\n</span><span class="st">"</span>);</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="exercise-real-world-examples"><div>
 <h1>Exercise: Real-world Examples</h1>
@@ -831,60 +847,125 @@ a.sourceLine::before { text-decoration: none; }
 <ul>
 <li>Result in out-of-bound writes after integer overflows</li>
 </ul>
-<div class="sourceCode" id="cb56"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb56-1" title="1"><span class="co">// @edd4a76eb4747bd19ed122df46fa46b452c12a0d</span></a>
-<a class="sourceLine" id="cb56-2" title="2"><span class="co">// CVE-2015-1538</span></a>
-<a class="sourceLine" id="cb56-3" title="3"><span class="co">//   uint32_t mTimeToSampleCount;</span></a>
-<a class="sourceLine" id="cb56-4" title="4"></a>
-<a class="sourceLine" id="cb56-5" title="5">     mTimeToSampleCount = U32_AT(&amp;header[<span class="dv">4</span>]);</a>
-<a class="sourceLine" id="cb56-6" title="6">     mTimeToSample = new <span class="dt">uint32_t</span>[mTimeToSampleCount * <span class="dv">2</span>];</a>
-<a class="sourceLine" id="cb56-7" title="7">     ...</a>
-<a class="sourceLine" id="cb56-8" title="8">     <span class="cf">for</span> (<span class="dt">uint32_t</span> i = <span class="dv">0</span>; i &lt; mTimeToSampleCount * <span class="dv">2</span>; ++i)</a>
-<a class="sourceLine" id="cb56-9" title="9">        mTimeToSample[i] = ntohl(mTimeToSample[i]);</a>
-<a class="sourceLine" id="cb56-10" title="10">     ...</a></code></pre></div>
-</div></section>
-<section class="slide level1" id="cve-2015-1538-android-stagefright-1"><div>
-<h1>CVE-2015-1538: Android (Stagefright)</h1>
 <div class="sourceCode" id="cb57"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb57-1" title="1"><span class="co">// @edd4a76eb4747bd19ed122df46fa46b452c12a0d</span></a>
 <a class="sourceLine" id="cb57-2" title="2"><span class="co">// CVE-2015-1538</span></a>
-<a class="sourceLine" id="cb57-3" title="3">     mTimeToSampleCount = U32_AT(&amp;header[<span class="dv">4</span>]);</a>
-<a class="sourceLine" id="cb57-4" title="4">+    <span class="dt">uint64_t</span> allocSize \</a>
-<a class="sourceLine" id="cb57-5" title="5">+               = mTimeToSampleCount * <span class="dv">2</span> * <span class="kw">sizeof</span>(<span class="dt">uint32_t</span>);</a>
-<a class="sourceLine" id="cb57-6" title="6">+    <span class="cf">if</span> (allocSize &gt; SIZE_MAX) {</a>
-<a class="sourceLine" id="cb57-7" title="7">+      <span class="cf">return</span> ERROR_OUT_OF_RANGE;</a>
-<a class="sourceLine" id="cb57-8" title="8">+    }</a>
-<a class="sourceLine" id="cb57-9" title="9">     mTimeToSample = new <span class="dt">uint32_t</span>[mTimeToSampleCount * <span class="dv">2</span>];</a>
+<a class="sourceLine" id="cb57-3" title="3"><span class="co">// uint32_t mTimeToSampleCount;</span></a>
+<a class="sourceLine" id="cb57-4" title="4"></a>
+<a class="sourceLine" id="cb57-5" title="5">     mTimeToSampleCount = U32_AT(&amp;header[<span class="dv">4</span>]);</a>
+<a class="sourceLine" id="cb57-6" title="6">     mTimeToSample = new <span class="dt">uint32_t</span>[mTimeToSampleCount * <span class="dv">2</span>];</a>
+<a class="sourceLine" id="cb57-7" title="7">     ...</a>
+<a class="sourceLine" id="cb57-8" title="8">     <span class="cf">for</span> (<span class="dt">uint32_t</span> i = <span class="dv">0</span>; i &lt; mTimeToSampleCount * <span class="dv">2</span>; ++i)</a>
+<a class="sourceLine" id="cb57-9" title="9">        mTimeToSample[i] = ntohl(mTimeToSample[i]);</a>
 <a class="sourceLine" id="cb57-10" title="10">     ...</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="attempt1-to-fix-stagefright"><div>
+<h1>Attempt1 to Fix Stagefright</h1>
+<div class="sourceCode" id="cb58"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb58-1" title="1"><span class="co">// @edd4a76eb4747bd19ed122df46fa46b452c12a0d</span></a>
+<a class="sourceLine" id="cb58-2" title="2"><span class="co">// CVE-2015-1538</span></a>
+<a class="sourceLine" id="cb58-3" title="3"><span class="co">// uint32_t mTimeToSampleCount;</span></a>
+<a class="sourceLine" id="cb58-4" title="4"></a>
+<a class="sourceLine" id="cb58-5" title="5">     mTimeToSampleCount = U32_AT(&amp;header[<span class="dv">4</span>]);</a>
+<a class="sourceLine" id="cb58-6" title="6">+    <span class="dt">uint64_t</span> allocSize \</a>
+<a class="sourceLine" id="cb58-7" title="7">+      = mTimeToSampleCount * <span class="dv">2</span> * <span class="kw">sizeof</span>(<span class="dt">uint32_t</span>);</a>
+<a class="sourceLine" id="cb58-8" title="8">+    <span class="cf">if</span> (allocSize &gt; SIZE_MAX) {</a>
+<a class="sourceLine" id="cb58-9" title="9">+      <span class="cf">return</span> ERROR_OUT_OF_RANGE;</a>
+<a class="sourceLine" id="cb58-10" title="10">+    }</a>
+<a class="sourceLine" id="cb58-11" title="11">     mTimeToSample = new <span class="dt">uint32_t</span>[mTimeToSampleCount * <span class="dv">2</span>];</a>
+<a class="sourceLine" id="cb58-12" title="12">     ...</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="attempt2-to-fix-stagefright"><div>
+<h1>Attempt2 to Fix Stagefright</h1>
+<ul>
+<li>RHS: (unsigned int)mTimeToSampleCount * 2 * sizeof(uint32_t)!</li>
+</ul>
+<div class="sourceCode" id="cb59"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb59-1" title="1"><span class="co">// @e2e812e58e8d2716b00d7d82db99b08d3afb4b32</span></a>
+<a class="sourceLine" id="cb59-2" title="2">     mTimeToSampleCount = U32_AT(&amp;header[<span class="dv">4</span>]);</a>
+<a class="sourceLine" id="cb59-3" title="3">+    <span class="dt">uint64_t</span> allocSize \</a>
+<a class="sourceLine" id="cb59-4" title="4">+      = mTimeToSampleCount * <span class="dv">2</span> * (<span class="dt">uint64_t</span>)<span class="kw">sizeof</span>(<span class="dt">uint32_t</span>);</a>
+<a class="sourceLine" id="cb59-5" title="5">+    <span class="cf">if</span> (allocSize &gt; SIZE_MAX) {</a>
+<a class="sourceLine" id="cb59-6" title="6">+      <span class="cf">return</span> ERROR_OUT_OF_RANGE;</a>
+<a class="sourceLine" id="cb59-7" title="7">+    }</a>
+<a class="sourceLine" id="cb59-8" title="8">     mTimeToSample = new <span class="dt">uint32_t</span>[mTimeToSampleCount * <span class="dv">2</span>];</a>
+<a class="sourceLine" id="cb59-9" title="9">     ...</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="attempt3-to-fix-stagefright"><div>
+<h1>Attempt3 to Fix Stagefright</h1>
+<ul>
+<li>RHS: (uint64_t)sizeof(uint32_t) is constant, again!</li>
+</ul>
+<div class="sourceCode" id="cb60"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb60-1" title="1"><span class="co">// @a105482ae577852ffd08ce88ae5d1ba81db875ac</span></a>
+<a class="sourceLine" id="cb60-2" title="2">     mTimeToSampleCount = U32_AT(&amp;header[<span class="dv">4</span>]);</a>
+<a class="sourceLine" id="cb60-3" title="3">+    <span class="dt">uint64_t</span> allocSize \</a>
+<a class="sourceLine" id="cb60-4" title="4">+      = (<span class="dt">uint64_t</span>)mTimeToSampleCount * <span class="dv">2</span> * <span class="kw">sizeof</span>(<span class="dt">uint32_t</span>);</a>
+<a class="sourceLine" id="cb60-5" title="5">+    <span class="cf">if</span> (allocSize &gt; SIZE_MAX) {</a>
+<a class="sourceLine" id="cb60-6" title="6">+      <span class="cf">return</span> ERROR_OUT_OF_RANGE;</a>
+<a class="sourceLine" id="cb60-7" title="7">+    }</a>
+<a class="sourceLine" id="cb60-8" title="8">     mTimeToSample = new <span class="dt">uint32_t</span>[mTimeToSampleCount * <span class="dv">2</span>];</a>
+<a class="sourceLine" id="cb60-9" title="9">     ...</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="attempt4-to-fix-stagefright"><div>
+<h1>Attempt4 to Fix Stagefright</h1>
+<ul>
+<li>RHS: allocSize &gt; SIZE_MAX in 64-bit!</li>
+</ul>
+<div class="sourceCode" id="cb61"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb61-1" title="1"><span class="co">// @a105482ae577852ffd08ce88ae5d1ba81db875ac</span></a>
+<a class="sourceLine" id="cb61-2" title="2">     mTimeToSampleCount = U32_AT(&amp;header[<span class="dv">4</span>]);</a>
+<a class="sourceLine" id="cb61-3" title="3">+    <span class="dt">uint64_t</span> allocSize \</a>
+<a class="sourceLine" id="cb61-4" title="4">+      = (<span class="dt">uint64_t</span>)mTimeToSampleCount * <span class="dv">2</span> * <span class="kw">sizeof</span>(<span class="dt">uint32_t</span>);</a>
+<a class="sourceLine" id="cb61-5" title="5">+    <span class="cf">if</span> (allocSize &gt; UINT32_MAX) {</a>
+<a class="sourceLine" id="cb61-6" title="6">+      <span class="cf">return</span> ERROR_OUT_OF_RANGE;</a>
+<a class="sourceLine" id="cb61-7" title="7">+    }</a>
+<a class="sourceLine" id="cb61-8" title="8">     mTimeToSample = new <span class="dt">uint32_t</span>[mTimeToSampleCount * <span class="dv">2</span>];</a>
+<a class="sourceLine" id="cb61-9" title="9">     ...</a></code></pre></div>
+</div></section>
+<section class="slide level1" id="cve-2015-1538-finally"><div>
+<h1>CVE-2015-1538: Finally!</h1>
+<div class="sourceCode" id="cb62"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb62-1" title="1"><span class="co">// @a3630a418b4f65277a42cd4018cd3b0b7e134d0c</span></a>
+<a class="sourceLine" id="cb62-2" title="2"></a>
+<a class="sourceLine" id="cb62-3" title="3">+ <span class="cf">if</span> (mTimeToSampleCount &gt;</a>
+<a class="sourceLine" id="cb62-4" title="4">+       UINT32_MAX / (<span class="dv">2</span> * <span class="kw">sizeof</span>(<span class="dt">uint32_t</span>))) {</a>
+<a class="sourceLine" id="cb62-5" title="5">+   <span class="co">// Choose this bound because</span></a>
+<a class="sourceLine" id="cb62-6" title="6">+   <span class="co">// 1) 2 * sizeof(uint32_t) is the amount of memory needed </span></a>
+<a class="sourceLine" id="cb62-7" title="7">+   <span class="co">//    for one time-to-sample entry in the time-to-sample</span></a>
+<a class="sourceLine" id="cb62-8" title="8">+   <span class="co">//    table.</span></a>
+<a class="sourceLine" id="cb62-9" title="9">+   <span class="co">// 2) mTimeToSampleCount is the number of entries of the</span></a>
+<a class="sourceLine" id="cb62-10" title="10">+   <span class="co">//    time-to-sample table.</span></a>
+<a class="sourceLine" id="cb62-11" title="11">+   <span class="co">// 3) We hope that the table size does not exceed</span></a>
+<a class="sourceLine" id="cb62-12" title="12">+   <span class="co">//    UINT32_MAX.</span></a>
+<a class="sourceLine" id="cb62-13" title="13">        <span class="cf">return</span> ERROR_OUT_OF_RANGE;</a>
+<a class="sourceLine" id="cb62-14" title="14">   }</a>
+<a class="sourceLine" id="cb62-15" title="15">   ...</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="cve-2015-3824-android-stagefright"><div>
 <h1>CVE-2015-3824: Android (Stagefright)</h1>
-<div class="sourceCode" id="cb58"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb58-1" title="1"><span class="co">// @463a6f807e187828442949d1924e143cf07778c6</span></a>
-<a class="sourceLine" id="cb58-2" title="2"><span class="co">// CVE-2015-3824</span></a>
-<a class="sourceLine" id="cb58-3" title="3">-    <span class="dt">uint8_t</span> *buffer = new <span class="dt">uint8_t</span>[size + chunk_size];</a>
-<a class="sourceLine" id="cb58-4" title="4">+    <span class="cf">if</span> (SIZE_MAX - chunk_size &lt;= size) {</a>
-<a class="sourceLine" id="cb58-5" title="5">+      <span class="cf">return</span> ERROR_MALFORMED;</a>
-<a class="sourceLine" id="cb58-6" title="6">+    }</a>
-<a class="sourceLine" id="cb58-7" title="7">+</a>
-<a class="sourceLine" id="cb58-8" title="8">+    <span class="dt">uint8_t</span> *buffer = new <span class="dt">uint8_t</span>[size + chunk_size];</a></code></pre></div>
+<div class="sourceCode" id="cb63"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb63-1" title="1"><span class="co">// @463a6f807e187828442949d1924e143cf07778c6</span></a>
+<a class="sourceLine" id="cb63-2" title="2"><span class="co">// CVE-2015-3824</span></a>
+<a class="sourceLine" id="cb63-3" title="3">-    <span class="dt">uint8_t</span> *buffer = new <span class="dt">uint8_t</span>[size + chunk_size];</a>
+<a class="sourceLine" id="cb63-4" title="4">+    <span class="cf">if</span> (SIZE_MAX - chunk_size &lt;= size) {</a>
+<a class="sourceLine" id="cb63-5" title="5">+      <span class="cf">return</span> ERROR_MALFORMED;</a>
+<a class="sourceLine" id="cb63-6" title="6">+    }</a>
+<a class="sourceLine" id="cb63-7" title="7">+</a>
+<a class="sourceLine" id="cb63-8" title="8">+    <span class="dt">uint8_t</span> *buffer = new <span class="dt">uint8_t</span>[size + chunk_size];</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="cve-2016-0728-linux-keyring"><div>
 <h1>CVE-2016-0728: Linux Keyring</h1>
 <ul>
 <li>Forcing the refcnt to be overflowed, resulting in privlege escalation!</li>
 </ul>
-<div class="sourceCode" id="cb59"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb59-1" title="1"><span class="dt">long</span> join_session_keyring(<span class="dt">const</span> <span class="dt">char</span> *name) {</a>
-<a class="sourceLine" id="cb59-2" title="2">  <span class="co">// </span><span class="al">NOTE</span><span class="co">. refcnt is incremented on "success"!</span></a>
-<a class="sourceLine" id="cb59-3" title="3">  keyring = find_keyring_by_name(name, false); </a>
-<a class="sourceLine" id="cb59-4" title="4">  <span class="cf">if</span> (PTR_ERR(keyring) == -ENOKEY) { ... } </a>
-<a class="sourceLine" id="cb59-5" title="5">  <span class="cf">else</span> <span class="cf">if</span> (IS_ERR(keyring)) { ... }</a>
-<a class="sourceLine" id="cb59-6" title="6">  } <span class="cf">else</span> <span class="cf">if</span> (keyring == new-&gt;session_keyring) {</a>
-<a class="sourceLine" id="cb59-7" title="7">    ret = <span class="dv">0</span>;</a>
-<a class="sourceLine" id="cb59-8" title="8">    <span class="cf">goto</span> error2;</a>
-<a class="sourceLine" id="cb59-9" title="9">  }</a>
-<a class="sourceLine" id="cb59-10" title="10">  ...</a>
-<a class="sourceLine" id="cb59-11" title="11">  key_put(keyring);</a>
-<a class="sourceLine" id="cb59-12" title="12"> error2:</a>
-<a class="sourceLine" id="cb59-13" title="13">  <span class="cf">return</span> ret;</a>
-<a class="sourceLine" id="cb59-14" title="14">}</a></code></pre></div>
+<div class="sourceCode" id="cb64"><pre class="sourceCode numberSource c numberLines"><code class="sourceCode c"><a class="sourceLine" id="cb64-1" title="1"><span class="dt">long</span> join_session_keyring(<span class="dt">const</span> <span class="dt">char</span> *name) {</a>
+<a class="sourceLine" id="cb64-2" title="2">  <span class="co">// </span><span class="al">NOTE</span><span class="co">. refcnt is incremented on "success"!</span></a>
+<a class="sourceLine" id="cb64-3" title="3">  keyring = find_keyring_by_name(name, false); </a>
+<a class="sourceLine" id="cb64-4" title="4">  <span class="cf">if</span> (PTR_ERR(keyring) == -ENOKEY) { ... } </a>
+<a class="sourceLine" id="cb64-5" title="5">  <span class="cf">else</span> <span class="cf">if</span> (IS_ERR(keyring)) { ... }</a>
+<a class="sourceLine" id="cb64-6" title="6">  } <span class="cf">else</span> <span class="cf">if</span> (keyring == new-&gt;session_keyring) {</a>
+<a class="sourceLine" id="cb64-7" title="7">    ret = <span class="dv">0</span>;</a>
+<a class="sourceLine" id="cb64-8" title="8">    <span class="cf">goto</span> error2;</a>
+<a class="sourceLine" id="cb64-9" title="9">  }</a>
+<a class="sourceLine" id="cb64-10" title="10">  ...</a>
+<a class="sourceLine" id="cb64-11" title="11">  key_put(keyring);</a>
+<a class="sourceLine" id="cb64-12" title="12"> error2:</a>
+<a class="sourceLine" id="cb64-13" title="13">  <span class="cf">return</span> ret;</a>
+<a class="sourceLine" id="cb64-14" title="14">}</a></code></pre></div>
 </div></section>
 <section class="slide level1" id="summary"><div>
 <h1>Summary</h1>

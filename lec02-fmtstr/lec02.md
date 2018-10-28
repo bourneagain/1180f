@@ -4,6 +4,7 @@
 - Off-the-shelf defenses:
     1. ASLR: Address Space Layout Randomization
     1. RELRO: Relocation Readonly
+- Format string vulnerabilities
 
 # Defense 3: ASLR
 - Option: -fPIE -pie
@@ -56,6 +57,29 @@ heap      : 0x558e291a0270
 ►  0x8048540 <puts@plt>   : jmp    dword ptr [_GOT_+40] ---+
    0x8048546 <puts@plt+6> : push   0x38                <---+ (1)
    0x804854b <puts@plt+11>: jmp    0x80484c0
+~~~~
+
+# PLT/GOT Internals (First puts() Call)
+
+~~~~{.c}
+   0x080488be <main+219>  : call   0x8048540 <puts@plt>
+    ↓
+►  0x8048540 <puts@plt>   : jmp    dword ptr [_GOT_+40] ---+
+   0x8048546 <puts@plt+6> : push   0x38                <---+ (1)
+   0x804854b <puts@plt+11>: jmp    0x80484c0
+    ↓
+   0x80484c0 : push   dword ptr [_GOT_+4]
+   0x80484c6 : jmp    dword ptr [0x804a008] <0xf7fe9240>
+~~~~
+
+# PLT/GOT Internals (First puts() Call)
+
+~~~~{.c}
+   0x080488be <main+219>  : call   0x8048540 <puts@plt>
+    ↓
+►  0x8048540 <puts@plt>   : jmp    dword ptr [_GOT_+40] ---+
+   0x8048546 <puts@plt+6> : push   0x38                <---+ (1)
+   0x804854b <puts@plt+11>: jmp    0x80484c0
     ↓
    0x80484c0 : push   dword ptr [_GOT_+4]
    0x80484c6 : jmp    dword ptr [0x804a008] <0xf7fe9240>
@@ -63,6 +87,14 @@ heap      : 0x558e291a0270
    0xf7fe9240 <_dl_runtime_resolve>  : push   eax
    0xf7fe9241 <_dl_runtime_resolve+1>: push   ecx
    0xf7fe9242 <_dl_runtime_resolve+2>: push   edx
+~~~~
+
+# PLT/GOT Internals (Second puts() Call)
+
+~~~~{.c}
+   0x080488be <main+219>  : call   0x8048540 <puts@plt>
+    ↓
+►  0x8048540 <puts@plt>   : jmp    dword ptr [_GOT_+40] --- (2)
 ~~~~
 
 # PLT/GOT Internals (Second puts() Call)
@@ -80,7 +112,8 @@ heap      : 0x558e291a0270
 # Checking Common Defenses
 
 ~~~~{.sh}
-; via pwntool
+# via pwntool
+#  ref. https://github.com/Gallopsled/pwntools
 $ checksec /usr/bin/ls
 [*] '/usr/bin/ls'
     Arch:     amd64-64-little
@@ -91,15 +124,15 @@ $ checksec /usr/bin/ls
 ~~~~
 
 # Goals and Lessons
-- Learn about the format string bugs
+- Learn about the format string bugs!
 - Understand their security implications
 - Understand the off-the-shelf mitigation
 - Learn them from the real-world examples (i.e., sudo/Linux)
 
-# About Format String
+# CS101: Format String
 
-- How does printf() know of #arguments passed?
-- How do we access the arguments in the function?
+- Q. How does printf() know of #arguments passed?
+- Q. How do we access the arguments in the function?
 
 ~~~~{.c}
   1) printf("hello: %d", 10);
@@ -107,9 +140,12 @@ $ checksec /usr/bin/ls
   3) printf("hello: %d/%d/%d", 10, 20, 30);
 ~~~~
 
-# About a "Variadic" Function
+# About "Variadic" Functions
 
-~~~~{.c}
+~~~~{.c .numberLines}
+// sum_up(2, 10, 20) -> 10 + 20
+// sum_up(4, 10, 20, 30, 40) -> 10 + 20 + 30 + 40
+
 int sum_up(int count,...) {
   va_list ap;
   int i, sum = 0;
@@ -123,9 +159,9 @@ int sum_up(int count,...) {
 }
 ~~~~
 
-# About a "Variadic" Function
+# About "Variadic" Functions
 
-~~~~{.s}
+~~~~{.asm .numberLines}
   va_start (ap, count);
     lea   eax,[ebp+0xc]             // Q1. 0xc?
     mov   DWORD PTR [ebp-0x18],eax
@@ -175,8 +211,7 @@ int sum_up(int count,...) {
     - Bypass many existing mitigation (e.g., DEP, ASLR)
 
 ~~~~{.c}
-  printf("%d/%d/%d", 10, 20, 30)
-  printf(fmtstr, 10, 20, 30)?
+  printf(fmtstr, 10, 20, 30); // fmtstr from an attacker
 ~~~~
 
 # About Format String Specifiers
@@ -250,7 +285,7 @@ int sum_up(int count,...) {
 
 # Implication 2: Arbitrary Write
 
-- In fact, we can control what to write (see more in the tutorial)!
+- In fact, we can even control what to write!
 
 ~~~~{.c}
   printf("\xaa\xbb\xcc\xdd%6c%3$n")
@@ -307,7 +342,7 @@ int sum_up(int count,...) {
 
 # CVE-2013-2851: Linux block device
 
-~~~~{.c}
+~~~~{.c .numberLines}
 int dev_set_name(struct device *dev, const char *fmt, ...) {
   va_list vargs;
   int err;
@@ -327,7 +362,7 @@ kthread_create(nbd_thread, nbd, nbd->disk->disk_name);
 
 # CVE-2013-1848: Linux ext3
 
-~~~~{.c}
+~~~~{.c .numberLines}
 void ext3_msg(struct super_block *sb, const char *prefix,
 		const char *fmt, ...)
 {
@@ -347,7 +382,7 @@ void ext3_msg(struct super_block *sb, const char *prefix,
 
 # CVE-2013-1848: Linux ext3
 
-~~~~{.c}
+~~~~{.c .numberLines}
 // @get_sb_block()
 ext3_msg(sb, "error: invalid sb specification: %s", *data);
 
@@ -358,7 +393,7 @@ ext3_msg(sb, "error: failed to open journal device %s: %ld",
 
 # CVE-2012-0809: sudo
 
-~~~~{.c}
+~~~~{.c .numberLines}
 void sudo_debug(int level, const char *fmt, ...) {
   va_list ap;
   char *fmt2;
@@ -416,20 +451,20 @@ $ make diff
 
 # __printf_chk()
 
-~~~~{.c}
+~~~~{.c .numberLines}
 // glibc/debug/printf_chk.c
 int ___printf_chk (int flag, const char *format, ...) {
   va_list ap; int done;
 
-  if (flag > 0)
-    stdout->_flags2 |= _IO_FLAGS2_FORTIFY;
+* if (flag > 0)
+*   stdout->_flags2 |= _IO_FLAGS2_FORTIFY;
 
   va_start (ap, format);
   done = vfprintf (stdout, format, ap);
   va_end (ap);
 
-  if (flag > 0)
-    stdout->_flags2 &= ~_IO_FLAGS2_FORTIFY;
+* if (flag > 0)
+*   stdout->_flags2 &= ~_IO_FLAGS2_FORTIFY;
 
   return done;
 }
@@ -441,7 +476,7 @@ int ___printf_chk (int flag, const char *format, ...) {
 - Ensuring that all positional arguments are used 
     - e.g., %2\$d is not ok without %1\$d
 
-~~~~{.c}
+~~~~{.c .numberLines}
   // @vprintf()
   for (cnt = 0; cnt < nargs; ++cnt)
     switch (args_type[cnt])
@@ -459,7 +494,7 @@ int ___printf_chk (int flag, const char *format, ...) {
 - Ensuring that fmtstr is in the read-only region (when %n)
     - e.g., "%n" should not be in a writable region
 
-~~~~{.c}
+~~~~{.c .numberLines}
 // @vprintf()
 LABEL (form_number):
   if (s->_flags2 & _IO_FLAGS2_FORTIFY) {
@@ -476,7 +511,7 @@ LABEL (form_number):
 
 # Defense 6: Code Annotation for Compilers
 
-~~~~{.c}
+~~~~{.c .numberLines}
 // @include/linux/compiler_types.h
 #define __printf(a, b) __attribute__((format(printf, a, b)))
 
@@ -490,7 +525,7 @@ void __ext4_msg(struct super_block *, const char *,
 
 # Defense 6: Code Annotation for Compilers
 
-~~~{.c}
+~~~{.c .numberLines}
 // @lec02-fmtstr/format
 $ cc -g -Wformat test.c -o test
 > format ‘%d’ expects a matching ‘int’ argument
@@ -506,6 +541,12 @@ $ cc -g -Wformat test.c -o test
    dev_set_name(3, "test4: %d %1$d", 1);         /* FALSE */
    ^~~~~~~~~~~~
 ~~~
+
+# Summary
+- Off-the-shelf defenses: DEP, ASLR
+- Format string bugs have unique, critical security implications
+- Even well-trained engineers tend to make such mistakes!
+- Use compiler-based checkers, if you haven't yet!
 
 # References
 
