@@ -2,8 +2,8 @@
 
 # Goals and Lessons
 - Learn about two classes of vulnerabilities
-    1. Integer overflow
-    1. Undefined behavior
+    1. **Integer overflow**
+    1. **Undefined behavior**
 - Understand their security implications
 - Understand best security practices
 - Learn them from the real-world examples (Android, Linux, etc)
@@ -57,8 +57,8 @@ Ref. <https://en.wikipedia.org/wiki/Two's_complement>
 ~~~~
 
 # Idea: Using Status Flags (E/RFLAGS)
-- CF: overflow of unsigned arithmetic operations
-- OF: overflow of signed arithmetic operations
+- **CF:** overflow of **unsigned** arithmetic operations
+- **OF:** overflow of **signed** arithmetic operations
 
 ~~~~
   0x00000001 + 0x00000002 = 0x00000003 ( 1 + 2 = 3)
@@ -114,7 +114,7 @@ Ref. <https://en.wikipedia.org/wiki/Two's_complement>
 ~~~~{.c}
                       int -> char
 [-2147483649, 2147483648] -> [-128, 127]
- [0x80000000, 0x7fffffff] -> [0x80, 0x7f]
+ [0x80000000, 0x7fffffff] -> [0x80, 0xff]
 
             unsigned int -> unsigned char
          [0, 4294967295] -> [0, 255]

@@ -124,15 +124,15 @@ $ checksec /usr/bin/ls
 ~~~~
 
 # Goals and Lessons
-- Learn about the format string bugs!
+- Learn about the **format string** bugs!
 - Understand their security implications
 - Understand the off-the-shelf mitigation
 - Learn them from the real-world examples (i.e., sudo/Linux)
 
 # CS101: Format String
 
-- Q. How does printf() know of #arguments passed?
-- Q. How do we access the arguments in the function?
+1. Q. How does printf() know of #arguments passed?
+1. Q. How do we access the arguments in the function?
 
 ~~~~{.c}
   1) printf("hello: %d", 10);
@@ -179,8 +179,8 @@ int sum_up(int count,...) {
 
 # Format String: e.g., printf()
 
-- What happen if we miss one format specifier?
-- What happen if we miss one argument?
+1. What happen if we miss one format specifier?
+1. What happen if we miss one argument?
 
 ~~~~{.c}
   // buggy
@@ -203,7 +203,7 @@ int sum_up(int count,...) {
            (1) (2) (3) ....
 ~~~~
 
-# Format String Vulnerabilities
+# Security Implication of Format String Bugs
 
 - What if attackers can control the format specifier (fmtstr)?
     - Arbitrary read -> info leaks (e.g., code pointers)
@@ -543,8 +543,8 @@ $ cc -g -Wformat test.c -o test
 ~~~
 
 # Summary
-- Off-the-shelf defenses: DEP, ASLR
-- Format string bugs have unique, critical security implications
+- Off-the-shelf defenses: **ASLR**, **RELRO**
+- **Format string** bugs have unique, critical security implications
 - Even well-trained engineers tend to make such mistakes!
 - Use compiler-based checkers, if you haven't yet!
 

@@ -129,8 +129,8 @@ a.sourceLine::before { text-decoration: none; }
 <ul>
 <li>Learn about two classes of vulnerabilities
 <ol type="1">
-<li>Integer overflow</li>
-<li>Undefined behavior</li>
+<li><strong>Integer overflow</strong></li>
+<li><strong>Undefined behavior</strong></li>
 </ol></li>
 <li>Understand their security implications</li>
 <li>Understand best security practices</li>
@@ -189,8 +189,8 @@ a.sourceLine::before { text-decoration: none; }
 <section class="slide level1" id="idea-using-status-flags-erflags"><div>
 <h1>Idea: Using Status Flags (E/RFLAGS)</h1>
 <ul>
-<li>CF: overflow of unsigned arithmetic operations</li>
-<li>OF: overflow of signed arithmetic operations</li>
+<li><strong>CF:</strong> overflow of <strong>unsigned</strong> arithmetic operations</li>
+<li><strong>OF:</strong> overflow of <strong>signed</strong> arithmetic operations</li>
 </ul>
 <pre><code>  0x00000001 + 0x00000002 = 0x00000003 ( 1 + 2 = 3)
     -&gt; CF: 0   OF: 0    SF: 0
@@ -241,7 +241,7 @@ a.sourceLine::before { text-decoration: none; }
 </ul>
 <div class="sourceCode" id="cb7"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb7-1" title="1">                      <span class="dt">int</span> -&gt; <span class="dt">char</span></a>
 <a class="sourceLine" id="cb7-2" title="2">[-<span class="dv">2147483649</span>, <span class="dv">2147483648</span>] -&gt; [-<span class="dv">128</span>, <span class="dv">127</span>]</a>
-<a class="sourceLine" id="cb7-3" title="3"> [<span class="bn">0x80000000</span>, <span class="bn">0x7fffffff</span>] -&gt; [<span class="bn">0x80</span>, <span class="bn">0x7f</span>]</a>
+<a class="sourceLine" id="cb7-3" title="3"> [<span class="bn">0x80000000</span>, <span class="bn">0x7fffffff</span>] -&gt; [<span class="bn">0x80</span>, <span class="bn">0xff</span>]</a>
 <a class="sourceLine" id="cb7-4" title="4"></a>
 <a class="sourceLine" id="cb7-5" title="5">            <span class="dt">unsigned</span> <span class="dt">int</span> -&gt; <span class="dt">unsigned</span> <span class="dt">char</span></a>
 <a class="sourceLine" id="cb7-6" title="6">         [<span class="dv">0</span>, <span class="dv">4294967295</span>] -&gt; [<span class="dv">0</span>, <span class="dv">255</span>]</a>

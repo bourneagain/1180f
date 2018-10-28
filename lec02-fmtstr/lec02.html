@@ -256,7 +256,7 @@ a.sourceLine::before { text-decoration: none; }
 <section class="slide level1" id="goals-and-lessons"><div>
 <h1>Goals and Lessons</h1>
 <ul>
-<li>Learn about the format string bugs!</li>
+<li>Learn about the <strong>format string</strong> bugs!</li>
 <li>Understand their security implications</li>
 <li>Understand the off-the-shelf mitigation</li>
 <li>Learn them from the real-world examples (i.e., sudo/Linux)</li>
@@ -264,10 +264,10 @@ a.sourceLine::before { text-decoration: none; }
 </div></section>
 <section class="slide level1" id="cs101-format-string"><div>
 <h1>CS101: Format String</h1>
-<ul>
+<ol type="1">
 <li>Q. How does printf() know of #arguments passed?</li>
 <li>Q. How do we access the arguments in the function?</li>
-</ul>
+</ol>
 <div class="sourceCode" id="cb9"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb9-1" title="1">  <span class="dv">1</span>) printf(<span class="st">"hello: %d"</span>, <span class="dv">10</span>);</a>
 <a class="sourceLine" id="cb9-2" title="2">  <span class="dv">2</span>) printf(<span class="st">"hello: %d/%d"</span>, <span class="dv">10</span>, <span class="dv">20</span>);</a>
 <a class="sourceLine" id="cb9-3" title="3">  <span class="dv">3</span>) printf(<span class="st">"hello: %d/%d/%d"</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>);</a></code></pre></div>
@@ -307,10 +307,10 @@ a.sourceLine::before { text-decoration: none; }
 </div></section>
 <section class="slide level1" id="format-string-e.g.-printf"><div>
 <h1>Format String: e.g., printf()</h1>
-<ul>
+<ol type="1">
 <li>What happen if we miss one format specifier?</li>
 <li>What happen if we miss one argument?</li>
-</ul>
+</ol>
 <div class="sourceCode" id="cb12"><pre class="sourceCode c"><code class="sourceCode c"><a class="sourceLine" id="cb12-1" title="1">  <span class="co">// buggy</span></a>
 <a class="sourceLine" id="cb12-2" title="2">  <span class="dv">1</span>) printf(<span class="st">"hello: %d/%d[missing]"</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>);</a>
 <a class="sourceLine" id="cb12-3" title="3">  <span class="dv">2</span>) printf(<span class="st">"hello: %d/%d/%d"</span>, <span class="dv">10</span>, <span class="dv">20</span>, [missing]);</a></code></pre></div>
@@ -328,8 +328,8 @@ a.sourceLine::before { text-decoration: none; }
 <a class="sourceLine" id="cb13-6" title="6">  [ra][fmt][<span class="dv">10</span>][<span class="dv">20</span>][??][..]</a>
 <a class="sourceLine" id="cb13-7" title="7">           (<span class="dv">1</span>) (<span class="dv">2</span>) (<span class="dv">3</span>) ....</a></code></pre></div>
 </div></section>
-<section class="slide level1" id="format-string-vulnerabilities"><div>
-<h1>Format String Vulnerabilities</h1>
+<section class="slide level1" id="security-implication-of-format-string-bugs"><div>
+<h1>Security Implication of Format String Bugs</h1>
 <ul>
 <li>What if attackers can control the format specifier (fmtstr)?
 <ul>
@@ -659,8 +659,8 @@ a.sourceLine::before { text-decoration: none; }
 <section class="slide level1" id="summary"><div>
 <h1>Summary</h1>
 <ul>
-<li>Off-the-shelf defenses: DEP, ASLR</li>
-<li>Format string bugs have unique, critical security implications</li>
+<li>Off-the-shelf defenses: <strong>ASLR</strong>, <strong>RELRO</strong></li>
+<li><strong>Format string</strong> bugs have unique, critical security implications</li>
 <li>Even well-trained engineers tend to make such mistakes!</li>
 <li>Use compiler-based checkers, if you haven’t yet!</li>
 </ul>
